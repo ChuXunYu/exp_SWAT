@@ -75,3 +75,18 @@
 任务：新增任务待办模块的核心领域实体与枚举，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/task/TaskPriority.java`、`java-ai-assistant/src/main/java/assistant/task/TaskStatus.java`、`java-ai-assistant/src/main/java/assistant/task/TaskItem.java`、`java-ai-assistant/src/test/java/assistant/task/TaskPriorityTest.java`、`java-ai-assistant/src/test/java/assistant/task/TaskStatusTest.java`、`java-ai-assistant/src/test/java/assistant/task/TaskItemTest.java`。
 选择理由：通用编号、日期、时间、金额、进度和标签基础已经完成，可以开始进入 8 个核心功能中的任务待办管理。任务实体、优先级和状态是后续 `TaskService`、`TaskQuery`、任务仓储、汇总服务和 AI 任务草稿导入的直接依赖；先集中实现领域模型，可把标题校验、截止日期、状态流转和重复完成冲突等规则固定在可测对象中。
 上下文：v1-v6 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线、`ErrorCode`/`BusinessException`/`OperationResult`、`EntityId`/`IdGenerator`、`TimeProvider`、`DateRange`/`DateTimeRange`、金额、进度与标签基础。技术方案与 OOD 要求任务实体至少持有标题、描述、优先级、截止日期、完成状态和编号；优先级与状态使用 enum；任务应支持完成、撤销完成和修改基础信息；重复完成、重复撤销属于状态冲突；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R8 PASSED 实现任务待办领域模型基础
+结果：新增 `assistant.task.TaskPriority`、`assistant.task.TaskStatus`、`assistant.task.TaskItem`，实现任务优先级、完成状态、标题和描述规范化、基础信息修改、完成/撤销完成状态迁移，以及重复状态迁移的 `STATE_CONFLICT` 业务冲突。
+测试：`mvn test` 通过；验证报告记录通过 193 个测试，失败 0 个。
+
+## R8 NEW 实现任务待办查询、仓储与服务闭环
+任务：新增任务待办模块的查询条件、仓储契约、内存仓储和应用服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/task/TaskQuery.java`、`java-ai-assistant/src/main/java/assistant/task/TaskRepository.java`、`java-ai-assistant/src/main/java/assistant/task/InMemoryTaskRepository.java`、`java-ai-assistant/src/main/java/assistant/task/TaskService.java`、`java-ai-assistant/src/test/java/assistant/task/TaskQueryTest.java`、`java-ai-assistant/src/test/java/assistant/task/InMemoryTaskRepositoryTest.java`、`java-ai-assistant/src/test/java/assistant/task/TaskServiceTest.java`。
+选择理由：v7 已完成任务实体与状态流转基础；任务待办核心功能还缺少创建、查看、修改、删除、按状态/优先级筛选、完成和撤销完成的服务入口。先完成任务模块服务闭环，可让后续汇总服务、AI 草稿导入和控制台菜单通过稳定公开 API 读写任务数据，而不直接操作实体或集合。
+上下文：既有 `TaskItem` 已负责字段不变量和重复完成/重复撤销的 `BusinessException(ErrorCode.STATE_CONFLICT, ...)`；既有 `EntityId`、`IdGenerator`、`OperationResult`、`ErrorCode` 可用于服务层生成编号和返回稳定成功/失败结果。技术方案要求任务查询支持按状态、优先级和截止日期等条件筛选；仓储默认使用内存 `LinkedHashMap<EntityId, TaskItem>` 保持插入顺序并返回不可修改快照；删除不存在任务、修改不存在任务、完成/撤销不存在任务应返回 `NOT_FOUND`，非法输入应返回 `VALIDATION_ERROR` 或由实体校验后在服务边界转换，本地单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+## R8 RETRY 实现任务待办查询、只读快照、仓储与服务闭环
+原因：计划审查指出原任务只要求列表集合不可修改，但未明确 `TaskService` 查询结果不得直接暴露仓储内部可变 `TaskItem`，可能导致外部调用方绕过服务修改任务状态或基础信息。
+修正：修订 `task_v8.md`，本轮新增 `TaskView` 只读 DTO/record，要求 `TaskService` 创建、查看、列表和组合筛选成功载荷返回 `TaskView` 或不可修改的 `List<TaskView>`，不得返回内部 `TaskItem` 引用；同时补充查询只读边界测试要求，验证载荷类型、列表不可修改，以及外部拿到查询结果后不能影响仓储内部状态。
