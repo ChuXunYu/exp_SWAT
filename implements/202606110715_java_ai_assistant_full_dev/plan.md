@@ -90,3 +90,14 @@
 ## R8 RETRY 实现任务待办查询、只读快照、仓储与服务闭环
 原因：计划审查指出原任务只要求列表集合不可修改，但未明确 `TaskService` 查询结果不得直接暴露仓储内部可变 `TaskItem`，可能导致外部调用方绕过服务修改任务状态或基础信息。
 修正：修订 `task_v8.md`，本轮新增 `TaskView` 只读 DTO/record，要求 `TaskService` 创建、查看、列表和组合筛选成功载荷返回 `TaskView` 或不可修改的 `List<TaskView>`，不得返回内部 `TaskItem` 引用；同时补充查询只读边界测试要求，验证载荷类型、列表不可修改，以及外部拿到查询结果后不能影响仓储内部状态。
+
+---
+
+## R9 PASSED 实现任务待办查询、只读快照、仓储与服务闭环
+结果：新增 `assistant.task.TaskQuery`、`TaskView`、`TaskRepository`、`InMemoryTaskRepository`、`TaskService`，实现任务创建、查看、列表、组合筛选、修改、删除、完成、撤销完成、错误转换和只读快照返回边界。
+测试：`mvn verify` 通过；验证报告记录通过 264 个测试，失败 0 个。
+
+## R9 NEW 实现日程领域模型与冲突策略基础
+任务：新增日程提醒模块的核心领域实体、动态状态枚举和冲突判断策略，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/schedule/ScheduleStatus.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleItem.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleConflictPolicy.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleStatusTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleItemTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleConflictPolicyTest.java`。
+选择理由：任务待办核心功能已经形成服务闭环，可以进入 8 个核心功能中的日程提醒管理。日程服务后续需要稳定的日程实体、基于 `TimeProvider` 的状态推导结果类型和可独立白盒测试的时间冲突规则；先实现领域模型与冲突策略，可避免服务层直接散落名称校验、时间区间重叠和首尾相接边界判断。
+上下文：既有 `EntityId`、`DateTimeRange`、`BusinessException`、`ErrorCode.SCHEDULE_CONFLICT`、`TimeProvider` 已可支撑日程编号、左闭右开时间区间和可控当前时间。技术方案要求日程实体至少持有名称、日期时间范围、地点和备注；日程状态不持久化，由服务或领域方法基于当前时间动态推导为即将开始、进行中、已过期；冲突判断集中在 `ScheduleConflictPolicy`，同一时间段存在非空重叠时视为冲突，首尾相接不冲突；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
