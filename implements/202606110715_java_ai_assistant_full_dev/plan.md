@@ -101,3 +101,14 @@
 任务：新增日程提醒模块的核心领域实体、动态状态枚举和冲突判断策略，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/schedule/ScheduleStatus.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleItem.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleConflictPolicy.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleStatusTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleItemTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleConflictPolicyTest.java`。
 选择理由：任务待办核心功能已经形成服务闭环，可以进入 8 个核心功能中的日程提醒管理。日程服务后续需要稳定的日程实体、基于 `TimeProvider` 的状态推导结果类型和可独立白盒测试的时间冲突规则；先实现领域模型与冲突策略，可避免服务层直接散落名称校验、时间区间重叠和首尾相接边界判断。
 上下文：既有 `EntityId`、`DateTimeRange`、`BusinessException`、`ErrorCode.SCHEDULE_CONFLICT`、`TimeProvider` 已可支撑日程编号、左闭右开时间区间和可控当前时间。技术方案要求日程实体至少持有名称、日期时间范围、地点和备注；日程状态不持久化，由服务或领域方法基于当前时间动态推导为即将开始、进行中、已过期；冲突判断集中在 `ScheduleConflictPolicy`，同一时间段存在非空重叠时视为冲突，首尾相接不冲突；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R10 PASSED 实现日程领域模型与冲突策略基础
+结果：新增 `assistant.schedule.ScheduleStatus`、`ScheduleItem`、`ScheduleConflictPolicy`，实现日程动态状态、名称/地点/备注规范化、时间范围更新、自然日覆盖和左闭右开冲突判断规则。
+测试：`mvn clean test` 通过；验证报告记录通过 316 个测试，失败 0 个。
+
+## R10 NEW 实现日程提醒查询、只读视图、仓储与服务闭环
+任务：新增日程提醒模块的查询条件、只读视图、仓储契约、内存仓储和应用服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/schedule/ScheduleQuery.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleView.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleRepository.java`、`java-ai-assistant/src/main/java/assistant/schedule/InMemoryScheduleRepository.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleService.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleQueryTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleViewTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/InMemoryScheduleRepositoryTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleServiceTest.java`。
+选择理由：v9 已完成日程实体、动态状态和冲突策略；日程提醒核心功能还缺少创建、查看、修改、删除、按日期查询和冲突拒绝的服务入口。先补齐日程服务闭环，可让后续汇总服务、AI 本地上下文和控制台菜单通过稳定公开 API 读取带动态状态的日程快照，而不直接暴露可变 `ScheduleItem` 或仓储集合。
+上下文：既有 `ScheduleItem` 负责字段不变量和 `statusAt(...)` 动态状态推导，`ScheduleConflictPolicy` 负责非空时间重叠冲突判断，`DateTimeRange.coversDate(...)` 支持跨日期按自然日查询；既有 `EntityId`、`IdGenerator`、`TimeProvider`、`OperationResult`、`ErrorCode.SCHEDULE_CONFLICT` 可用于服务层生成编号、读取当前时间、返回只读视图和稳定错误分类。技术方案要求日程创建/修改时识别同一时间段冲突并拒绝保存，首尾相接不冲突，按日期查询返回该日期开始或覆盖该日期的日程快照，状态基于可注入当前时间动态计算；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
