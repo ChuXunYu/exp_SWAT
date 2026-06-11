@@ -53,3 +53,14 @@
 任务：新增单笔收支金额值对象和统计金额值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/common/TransactionAmount.java`、`java-ai-assistant/src/main/java/assistant/common/MoneyValue.java`、`java-ai-assistant/src/test/java/assistant/common/TransactionAmountTest.java`、`java-ai-assistant/src/test/java/assistant/common/MoneyValueTest.java`。
 选择理由：收支记录管理与收支统计是需求中的白盒测试重点，后续 `finance.TransactionRecord`、`FinanceService`、`FinanceStatisticsService` 都依赖稳定的金额合法性、精度和加减语义。先实现两个底层金额值对象，可避免后续 finance 模块直接使用裸 `BigDecimal` 或 `double`，并集中覆盖零值、负数、小数位和统计结余等边界。
 上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用错误/结果类型，v2 已完成 `EntityId` 与可替换编号生成，v3 已完成 `TimeProvider`，v4 已完成 `DateRange` 与 `DateTimeRange`。技术方案要求 `TransactionAmount` 使用 `BigDecimal` 表示单笔收入或支出金额，必须大于 0 且最多两位小数；`MoneyValue` 使用 `BigDecimal` 表示统计金额，允许 0 和负数，统一两位小数展示，统计计算禁止使用 `double`。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R6 PASSED 实现金额值对象基础
+结果：新增 `assistant.common.TransactionAmount`、`assistant.common.MoneyValue`，实现单笔正金额校验、统计金额规范化、字符串工厂、金额转换、加减运算和两位小数展示，并补齐公开接口边界测试。
+测试：`mvn test` 通过；验证报告记录通过 128 个测试，失败 0 个。
+
+## R6 NEW 实现进度与标签值对象基础
+任务：新增学习进度值对象和笔记标签值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/common/Progress.java`、`java-ai-assistant/src/main/java/assistant/common/Tag.java`、`java-ai-assistant/src/test/java/assistant/common/ProgressTest.java`、`java-ai-assistant/src/test/java/assistant/common/TagTest.java`。
+选择理由：学习计划管理依赖 0 到 100 的进度边界和 100% 完成语义；笔记管理、标签查询、标签分布统计和 AI 本地上下文依赖稳定的标签清理与比较语义。先实现这两个通用值对象，可避免后续 `study` 和 `note` 模块重复散落进度越界、空标签和标签归一规则。
+上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用错误/结果类型，v2 已完成 `EntityId` 与可替换编号生成，v3 已完成 `TimeProvider`，v4 已完成 `DateRange` 与 `DateTimeRange`，v5 已完成金额基础。技术方案要求 `Progress` 值对象范围为 0 到 100；标签使用 `Tag` 值对象，去除首尾空白，空标签拒绝，大小写归一规则由 `Tag` 集中决定，服务层不重复处理。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
