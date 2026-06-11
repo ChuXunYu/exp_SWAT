@@ -112,3 +112,14 @@
 任务：新增日程提醒模块的查询条件、只读视图、仓储契约、内存仓储和应用服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/schedule/ScheduleQuery.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleView.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleRepository.java`、`java-ai-assistant/src/main/java/assistant/schedule/InMemoryScheduleRepository.java`、`java-ai-assistant/src/main/java/assistant/schedule/ScheduleService.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleQueryTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleViewTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/InMemoryScheduleRepositoryTest.java`、`java-ai-assistant/src/test/java/assistant/schedule/ScheduleServiceTest.java`。
 选择理由：v9 已完成日程实体、动态状态和冲突策略；日程提醒核心功能还缺少创建、查看、修改、删除、按日期查询和冲突拒绝的服务入口。先补齐日程服务闭环，可让后续汇总服务、AI 本地上下文和控制台菜单通过稳定公开 API 读取带动态状态的日程快照，而不直接暴露可变 `ScheduleItem` 或仓储集合。
 上下文：既有 `ScheduleItem` 负责字段不变量和 `statusAt(...)` 动态状态推导，`ScheduleConflictPolicy` 负责非空时间重叠冲突判断，`DateTimeRange.coversDate(...)` 支持跨日期按自然日查询；既有 `EntityId`、`IdGenerator`、`TimeProvider`、`OperationResult`、`ErrorCode.SCHEDULE_CONFLICT` 可用于服务层生成编号、读取当前时间、返回只读视图和稳定错误分类。技术方案要求日程创建/修改时识别同一时间段冲突并拒绝保存，首尾相接不冲突，按日期查询返回该日期开始或覆盖该日期的日程快照，状态基于可注入当前时间动态计算；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R11 PASSED 实现日程提醒查询、只读视图、仓储与服务闭环
+结果：新增 `assistant.schedule.ScheduleQuery`、`ScheduleView`、`ScheduleRepository`、`InMemoryScheduleRepository`、`ScheduleService`，实现日程创建、查看、列表、筛选、按日期查询、修改、删除、冲突拒绝、错误分类和只读状态快照返回边界。
+测试：`mvn test` 通过；验证报告记录通过 385 个测试，失败 0 个。
+
+## R11 NEW 实现学习计划领域模型与状态分析基础
+任务：新增学习计划模块的核心领域实体、状态枚举和状态分析组件，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/study/StudyPlanStatus.java`、`java-ai-assistant/src/main/java/assistant/study/StudyPlan.java`、`java-ai-assistant/src/main/java/assistant/study/StudyPlanAnalysisService.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanStatusTest.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanTest.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanAnalysisServiceTest.java`。
+选择理由：任务待办和日程提醒两个核心模块已形成服务闭环，可以进入 8 个核心功能中的学习计划管理。学习计划服务、汇总服务和 AI 拆解上下文后续都依赖稳定的计划实体、动态状态分类和统一分析规则；先实现领域模型与分析组件，可集中固定目标名称、日期周期、预期投入、进度更新、完成优先级和逾期判断等高分支规则。
+上下文：既有 `EntityId` 可作为学习计划唯一编号，`DateRange` 可表达开始日期到截止日期的左右闭计划周期，`Progress` 已保证 0 到 100 进度边界，`TimeProvider.today()` 可为后续服务注入当前日期。技术方案要求学习计划实体持有目标名称、开始日期、截止日期、预期投入小时数和进度；开始日期晚于截止日期拒绝创建；计划状态由 `StudyPlanAnalysisService` 统一推导为未开始、进行中、已完成、逾期未完成，且进度 100 的已完成优先级高于日期状态；完成数量统计和本周统计后续也应复用该分析组件。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
