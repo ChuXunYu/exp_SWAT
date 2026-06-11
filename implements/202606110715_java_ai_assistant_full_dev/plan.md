@@ -20,3 +20,14 @@
 任务：新增跨业务唯一编号值对象与可替换编号生成基础，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/common/EntityId.java`、`java-ai-assistant/src/main/java/assistant/testability/IdGenerator.java`、`java-ai-assistant/src/main/java/assistant/testability/IncrementalIdGenerator.java`、`java-ai-assistant/src/test/java/assistant/common/EntityIdTest.java`、`java-ai-assistant/src/test/java/assistant/testability/IncrementalIdGeneratorTest.java`。
 选择理由：任务、日程、学习计划、收支、笔记和 AI 草稿等所有可修改记录都需要稳定唯一标识；后续业务服务创建记录时依赖编号生成器，测试也需要可预测编号边界。先实现该底层依赖，可避免后续各业务模块重复使用裸 `long` 或分散实现编号逻辑。
 上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与 `assistant.common` 错误/结果类型。技术方案要求 `EntityId` 使用正整数语义、底层可用 `long`，所有可修改记录持有 `EntityId`；默认编号由 `IncrementalIdGenerator` 生成；生产代码可依赖 `assistant.testability` 中的简单抽象及基础实现，测试可替换为固定序列生成器。
+
+---
+
+## R3 PASSED 实现实体编号与递增编号生成基础
+结果：新增 `assistant.common.EntityId`、`assistant.testability.IdGenerator`、`assistant.testability.IncrementalIdGenerator`，补齐正整数编号、可替换编号生成和递增编号边界行为。
+测试：`mvn clean verify` 通过；验证报告记录通过 34 个测试，失败 0 个。
+
+## R3 NEW 实现可替换时间提供基础
+任务：新增跨业务时间抽象和基础实现，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/testability/TimeProvider.java`、`java-ai-assistant/src/main/java/assistant/testability/SystemTimeProvider.java`、`java-ai-assistant/src/main/java/assistant/testability/FixedTimeProvider.java`、`java-ai-assistant/src/test/java/assistant/testability/FixedTimeProviderTest.java`、必要时补充 `SystemTimeProviderTest.java`。
+选择理由：日程状态、学习计划逾期、本周统计、本月统计、今日摘要和 AI 本地上下文都依赖“当前日期/时间”；需求明确普通单元测试不得依赖真实当前时间。先实现可注入时间基础，可避免后续业务服务直接调用 `LocalDate.now()` 或 `LocalDateTime.now()`，并为边界状态测试提供稳定入口。
+上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用结果类型，v2 已完成 `EntityId` 和 `IdGenerator`。技术方案要求 `assistant.testability.TimeProvider` 返回当前 `LocalDate` 与 `LocalDateTime`，生产实现读取系统时间，测试实现固定在指定日期时间；生产代码可依赖 `assistant.testability` 中的简单抽象及基础实现，JUnit 专用 fake/stub 不放入生产源码。
