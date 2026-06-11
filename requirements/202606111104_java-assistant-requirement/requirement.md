@@ -21,3 +21,12 @@ $cangjie-requirement-design-harness 请你阅读这个仓库的三个md，然后
 - 实验报告需要覆盖实验 1 和实验 2 的测试计划、测试用例、测试结果分析、实验总结。
 - 评分特别关注测试计划、测试用例设计、测试结果分析、待测应用程序编码规范和实验报告规范；本次需求文档应尤其强化测试相关内容。
 - 提交材料包括实验报告、答辩视频、其它文档；其它文档中需要包含待测程序源代码、开发和运行环境说明、单元测试脚本。
+
+# 迭代需求（202606111114）
+
+用户要求使用以下 todo 文件迭代上一版需求文档：
+
+- todo 文件：`/Users/chuyuxun/Documents/workspace/软测/experiments/requirements/202606111104_java-assistant-requirement/todo.md`
+- 基线需求文档：`/Users/chuyuxun/Documents/workspace/软测/experiments/requirements/202606111104_java-assistant-requirement/req_v1.md`
+
+本轮目标是在保留原有需求设计意图的基础上，根据 todo 文件中的待办事项修订需求文档，输出下一版完整需求文档。修订时应继续满足原始要求：适用 Java，功能不少于 8 个，尤其着重测试部分内容，并与仓库中的三个 Markdown 实验材料保持一致。
