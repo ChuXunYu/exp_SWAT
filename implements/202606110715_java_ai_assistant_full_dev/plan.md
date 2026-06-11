@@ -31,3 +31,14 @@
 任务：新增跨业务时间抽象和基础实现，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/testability/TimeProvider.java`、`java-ai-assistant/src/main/java/assistant/testability/SystemTimeProvider.java`、`java-ai-assistant/src/main/java/assistant/testability/FixedTimeProvider.java`、`java-ai-assistant/src/test/java/assistant/testability/FixedTimeProviderTest.java`、必要时补充 `SystemTimeProviderTest.java`。
 选择理由：日程状态、学习计划逾期、本周统计、本月统计、今日摘要和 AI 本地上下文都依赖“当前日期/时间”；需求明确普通单元测试不得依赖真实当前时间。先实现可注入时间基础，可避免后续业务服务直接调用 `LocalDate.now()` 或 `LocalDateTime.now()`，并为边界状态测试提供稳定入口。
 上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用结果类型，v2 已完成 `EntityId` 和 `IdGenerator`。技术方案要求 `assistant.testability.TimeProvider` 返回当前 `LocalDate` 与 `LocalDateTime`，生产实现读取系统时间，测试实现固定在指定日期时间；生产代码可依赖 `assistant.testability` 中的简单抽象及基础实现，JUnit 专用 fake/stub 不放入生产源码。
+
+---
+
+## R4 PASSED 实现可替换时间提供基础
+结果：新增 `assistant.testability.TimeProvider`、`SystemTimeProvider`、`FixedTimeProvider`，实现可注入当前日期和当前时间能力，并补齐固定时间与系统时间基础测试。
+测试：`mvn clean test` 通过；验证报告记录通过 43 个测试，失败 0 个，推送成功。
+
+## R4 NEW 实现日期区间与日期时间区间值对象
+任务：新增跨业务日期区间和日期时间区间值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/common/DateRange.java`、`java-ai-assistant/src/main/java/assistant/common/DateTimeRange.java`、`java-ai-assistant/src/test/java/assistant/common/DateRangeTest.java`、`java-ai-assistant/src/test/java/assistant/common/DateTimeRangeTest.java`。
+选择理由：收支日期筛选、学习计划周期、本周和本月统计依赖左右闭区间日期语义；日程时间校验、冲突识别和按日期查询依赖左闭右开日期时间语义。先实现这两个通用值对象，可为后续日程、学习、收支和汇总模块提供稳定可测的边界判断，避免各业务服务重复实现日期比较逻辑。
+上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用错误/结果类型，v2 已完成 `EntityId` 与可替换编号生成，v3 已完成 `TimeProvider`、系统时间和固定时间实现。技术方案要求 `DateRange` 使用左右闭区间，开始日期晚于结束日期时作为输入校验错误；`DateTimeRange` 使用左闭右开区间，结束时间必须晚于开始时间，当前时间等于开始时间视为包含、等于结束时间视为不包含，两个区间首尾相接不冲突，只有非空重叠才冲突。普通单元测试不得依赖真实当前时间、网络或 API Key。
