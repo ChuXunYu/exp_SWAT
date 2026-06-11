@@ -47,3 +47,14 @@ $cangjie-requirement-design-harness 请你阅读这个仓库的三个md，然后
 - 需要系统强化状态变化和跨模块交互测试，明确状态迁移、基本流/备选流和场景链路测试，例如任务完成/撤销、提醒状态变化、记录增删后统计同步等。
 
 修订时仍需保留原始要求：适用 Java，功能不少于 8 个，当前范围只做实验 1，并尤其着重测试部分内容。
+
+# 迭代需求（202606111156）
+
+用户要求继续使用以下 todo 文件迭代上一版需求文档：
+
+- todo 文件：`/Users/chuyuxun/Documents/workspace/软测/experiments/requirements/202606111104_java-assistant-requirement/todo.md`
+- 基线需求文档：`/Users/chuyuxun/Documents/workspace/软测/experiments/requirements/202606111104_java-assistant-requirement/req_v3.md`
+
+本轮目标是在 `req_v3.md` 的基础上，按照当前 `todo.md` 的最新内容修订为下一版完整需求文档。当前 todo 明确提出：目前功能模块太多，需要删除 3 个模块，并确保删除后的需求文档自洽且符合 `/Users/chuyuxun/Documents/workspace/软测/experiments/软件质量保证与测试实验指导书.md` 的要求。
+
+修订时需要保留原始硬性约束：适用 Java，当前范围只做实验 1，功能不少于 8 个，尤其着重测试部分内容；如果删除 3 个模块后仍需满足“功能不少于 8 个”，应保留至少 8 个核心功能并同步调整测试计划、测试范围、用例设计、状态/场景链路和交付说明，避免文档中残留已删除模块造成不自洽。
