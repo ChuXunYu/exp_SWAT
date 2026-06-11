@@ -30,3 +30,20 @@ $cangjie-requirement-design-harness 请你阅读这个仓库的三个md，然后
 - 基线需求文档：`/Users/chuyuxun/Documents/workspace/软测/experiments/requirements/202606111104_java-assistant-requirement/req_v1.md`
 
 本轮目标是在保留原有需求设计意图的基础上，根据 todo 文件中的待办事项修订需求文档，输出下一版完整需求文档。修订时应继续满足原始要求：适用 Java，功能不少于 8 个，尤其着重测试部分内容，并与仓库中的三个 Markdown 实验材料保持一致。
+
+# 迭代需求（202606111139）
+
+用户要求继续使用以下 todo 文件迭代上一版需求文档：
+
+- todo 文件：`/Users/chuyuxun/Documents/workspace/软测/experiments/requirements/202606111104_java-assistant-requirement/todo.md`
+- 基线需求文档：`/Users/chuyuxun/Documents/workspace/软测/experiments/requirements/202606111104_java-assistant-requirement/req_v2.md`
+
+本轮目标是在 `req_v2.md` 的基础上，按照当前 `todo.md` 的最新内容修订为下一版完整需求文档。当前 todo 明确提出以下方向：
+
+- 实验一的助手应定位为 AI 助手，需要接入 DeepSeek Flash 大模型；接口兼容 OpenAI，`base_url` 为 `https://api.deepseek.com`，模型为 `deepseek-v4-flash`。
+- 需要澄清测试分层：JUnit 单元测试应保持在单元级别，通过 mock/stub 隔离外部资源和文件系统依赖；真实文件 I/O 应放入组件测试或集成测试中验证，避免把单元测试和真实文件 I/O 验证混在一起。
+- 需要把“修复并复测”扩展为明确的回归测试要求：每次缺陷修复必须新增复现用例，并重跑相关模块测试及核心回归测试集。
+- 白盒测试不能只列测试方法名称，还需要可证明的覆盖证据，例如核心复杂方法的控制流图、圈复杂度、独立路径设计、branch/condition coverage 结果或方法-用例映射表。
+- 需要系统强化状态变化和跨模块交互测试，明确状态迁移、基本流/备选流和场景链路测试，例如任务完成/撤销、提醒状态变化、记录增删后统计同步等。
+
+修订时仍需保留原始要求：适用 Java，功能不少于 8 个，当前范围只做实验 1，并尤其着重测试部分内容。
