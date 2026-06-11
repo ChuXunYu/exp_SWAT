@@ -64,3 +64,14 @@
 任务：新增学习进度值对象和笔记标签值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/common/Progress.java`、`java-ai-assistant/src/main/java/assistant/common/Tag.java`、`java-ai-assistant/src/test/java/assistant/common/ProgressTest.java`、`java-ai-assistant/src/test/java/assistant/common/TagTest.java`。
 选择理由：学习计划管理依赖 0 到 100 的进度边界和 100% 完成语义；笔记管理、标签查询、标签分布统计和 AI 本地上下文依赖稳定的标签清理与比较语义。先实现这两个通用值对象，可避免后续 `study` 和 `note` 模块重复散落进度越界、空标签和标签归一规则。
 上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用错误/结果类型，v2 已完成 `EntityId` 与可替换编号生成，v3 已完成 `TimeProvider`，v4 已完成 `DateRange` 与 `DateTimeRange`，v5 已完成金额基础。技术方案要求 `Progress` 值对象范围为 0 到 100；标签使用 `Tag` 值对象，去除首尾空白，空标签拒绝，大小写归一规则由 `Tag` 集中决定，服务层不重复处理。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R7 PASSED 实现进度与标签值对象基础
+结果：新增 `assistant.common.Progress`、`assistant.common.Tag`，实现学习进度 0 到 100 边界、完成判断、百分比展示、标签首尾空白清理、空标签拒绝、`Locale.ROOT` 小写归一、展示文本和集合/映射键语义。
+测试：`mvn test` 通过；验证报告记录通过 153 个测试，失败 0 个。
+
+## R7 NEW 实现任务待办领域模型基础
+任务：新增任务待办模块的核心领域实体与枚举，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/task/TaskPriority.java`、`java-ai-assistant/src/main/java/assistant/task/TaskStatus.java`、`java-ai-assistant/src/main/java/assistant/task/TaskItem.java`、`java-ai-assistant/src/test/java/assistant/task/TaskPriorityTest.java`、`java-ai-assistant/src/test/java/assistant/task/TaskStatusTest.java`、`java-ai-assistant/src/test/java/assistant/task/TaskItemTest.java`。
+选择理由：通用编号、日期、时间、金额、进度和标签基础已经完成，可以开始进入 8 个核心功能中的任务待办管理。任务实体、优先级和状态是后续 `TaskService`、`TaskQuery`、任务仓储、汇总服务和 AI 任务草稿导入的直接依赖；先集中实现领域模型，可把标题校验、截止日期、状态流转和重复完成冲突等规则固定在可测对象中。
+上下文：v1-v6 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线、`ErrorCode`/`BusinessException`/`OperationResult`、`EntityId`/`IdGenerator`、`TimeProvider`、`DateRange`/`DateTimeRange`、金额、进度与标签基础。技术方案与 OOD 要求任务实体至少持有标题、描述、优先级、截止日期、完成状态和编号；优先级与状态使用 enum；任务应支持完成、撤销完成和修改基础信息；重复完成、重复撤销属于状态冲突；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
