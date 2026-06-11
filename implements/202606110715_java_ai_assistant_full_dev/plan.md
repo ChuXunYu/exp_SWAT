@@ -42,3 +42,14 @@
 任务：新增跨业务日期区间和日期时间区间值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/common/DateRange.java`、`java-ai-assistant/src/main/java/assistant/common/DateTimeRange.java`、`java-ai-assistant/src/test/java/assistant/common/DateRangeTest.java`、`java-ai-assistant/src/test/java/assistant/common/DateTimeRangeTest.java`。
 选择理由：收支日期筛选、学习计划周期、本周和本月统计依赖左右闭区间日期语义；日程时间校验、冲突识别和按日期查询依赖左闭右开日期时间语义。先实现这两个通用值对象，可为后续日程、学习、收支和汇总模块提供稳定可测的边界判断，避免各业务服务重复实现日期比较逻辑。
 上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用错误/结果类型，v2 已完成 `EntityId` 与可替换编号生成，v3 已完成 `TimeProvider`、系统时间和固定时间实现。技术方案要求 `DateRange` 使用左右闭区间，开始日期晚于结束日期时作为输入校验错误；`DateTimeRange` 使用左闭右开区间，结束时间必须晚于开始时间，当前时间等于开始时间视为包含、等于结束时间视为不包含，两个区间首尾相接不冲突，只有非空重叠才冲突。普通单元测试不得依赖真实当前时间、网络或 API Key。
+
+---
+
+## R5 PASSED 实现日期区间与日期时间区间值对象
+结果：新增 `assistant.common.DateRange`、`assistant.common.DateTimeRange`，实现日期闭区间、日期时间左闭右开区间、包含判断、重叠判断和自然日覆盖判断，并补齐边界行为单元测试。
+测试：`mvn test` 通过；验证报告记录通过 90 个测试，失败 0 个，推送成功。
+
+## R5 NEW 实现金额值对象基础
+任务：新增单笔收支金额值对象和统计金额值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/common/TransactionAmount.java`、`java-ai-assistant/src/main/java/assistant/common/MoneyValue.java`、`java-ai-assistant/src/test/java/assistant/common/TransactionAmountTest.java`、`java-ai-assistant/src/test/java/assistant/common/MoneyValueTest.java`。
+选择理由：收支记录管理与收支统计是需求中的白盒测试重点，后续 `finance.TransactionRecord`、`FinanceService`、`FinanceStatisticsService` 都依赖稳定的金额合法性、精度和加减语义。先实现两个底层金额值对象，可避免后续 finance 模块直接使用裸 `BigDecimal` 或 `double`，并集中覆盖零值、负数、小数位和统计结余等边界。
+上下文：v1 已完成 Maven/JUnit/Mockito/Jackson/JaCoCo 基线与通用错误/结果类型，v2 已完成 `EntityId` 与可替换编号生成，v3 已完成 `TimeProvider`，v4 已完成 `DateRange` 与 `DateTimeRange`。技术方案要求 `TransactionAmount` 使用 `BigDecimal` 表示单笔收入或支出金额，必须大于 0 且最多两位小数；`MoneyValue` 使用 `BigDecimal` 表示统计金额，允许 0 和负数，统一两位小数展示，统计计算禁止使用 `double`。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
