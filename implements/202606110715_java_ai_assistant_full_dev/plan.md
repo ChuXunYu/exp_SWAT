@@ -123,3 +123,32 @@
 任务：新增学习计划模块的核心领域实体、状态枚举和状态分析组件，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/study/StudyPlanStatus.java`、`java-ai-assistant/src/main/java/assistant/study/StudyPlan.java`、`java-ai-assistant/src/main/java/assistant/study/StudyPlanAnalysisService.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanStatusTest.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanTest.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanAnalysisServiceTest.java`。
 选择理由：任务待办和日程提醒两个核心模块已形成服务闭环，可以进入 8 个核心功能中的学习计划管理。学习计划服务、汇总服务和 AI 拆解上下文后续都依赖稳定的计划实体、动态状态分类和统一分析规则；先实现领域模型与分析组件，可集中固定目标名称、日期周期、预期投入、进度更新、完成优先级和逾期判断等高分支规则。
 上下文：既有 `EntityId` 可作为学习计划唯一编号，`DateRange` 可表达开始日期到截止日期的左右闭计划周期，`Progress` 已保证 0 到 100 进度边界，`TimeProvider.today()` 可为后续服务注入当前日期。技术方案要求学习计划实体持有目标名称、开始日期、截止日期、预期投入小时数和进度；开始日期晚于截止日期拒绝创建；计划状态由 `StudyPlanAnalysisService` 统一推导为未开始、进行中、已完成、逾期未完成，且进度 100 的已完成优先级高于日期状态；完成数量统计和本周统计后续也应复用该分析组件。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R12 PASSED 实现学习计划领域模型与状态分析基础
+结果：新增 `assistant.study.StudyPlanStatus`、`StudyPlan`、`StudyPlanAnalysisService`，实现学习计划目标名称、日期周期、预期投入小时数、进度更新、完成优先级和基于显式当前日期的动态状态分析。
+测试：`mvn clean test` 通过；验证报告记录通过 427 个测试，失败 0 个，推送成功。
+
+## R12 NEW 实现学习计划查询、只读视图、仓储与服务闭环
+任务：新增学习计划模块的查询条件、只读视图、仓储契约、内存仓储和应用服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/study/StudyPlanQuery.java`、`java-ai-assistant/src/main/java/assistant/study/StudyPlanView.java`、`java-ai-assistant/src/main/java/assistant/study/StudyPlanRepository.java`、`java-ai-assistant/src/main/java/assistant/study/InMemoryStudyPlanRepository.java`、`java-ai-assistant/src/main/java/assistant/study/StudyPlanService.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanQueryTest.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanViewTest.java`、`java-ai-assistant/src/test/java/assistant/study/InMemoryStudyPlanRepositoryTest.java`、`java-ai-assistant/src/test/java/assistant/study/StudyPlanServiceTest.java`。
+选择理由：v11 已完成学习计划实体、状态枚举和状态分析组件；学习计划核心功能还缺少创建、查看、修改、删除、更新进度、按状态或周期筛选、完成/未完成数量统计和只读服务入口。先补齐学习计划服务闭环，可让后续汇总服务、AI 本地上下文、草稿导入和控制台菜单通过稳定公开 API 读取带动态状态的学习计划快照，而不直接暴露可变 `StudyPlan` 或仓储集合。
+上下文：既有 `StudyPlan` 负责目标名称、`DateRange` 周期、预期投入小时数和 `Progress` 不变量，`StudyPlanAnalysisService` 负责基于当前日期推导 `StudyPlanStatus`，`EntityId`、`IdGenerator`、`TimeProvider`、`OperationResult` 和 `ErrorCode` 已可支撑服务层生成编号、读取可控当前日期并返回稳定成功/失败结果。技术方案要求学习计划创建和更新进度拒绝非法输入，状态由统一分析组件动态推导，进度 100 优先识别为已完成，完成数量统计和本周统计后续复用该分析组件；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R12 RETRY 实现学习计划查询、只读视图、仓储与服务闭环
+原因：计划审查指出两个契约缺口：其一，学习计划动态状态筛选未像 `schedule` 模块那样显式传入当前日期与分析组件，容易导致 query、仓储或服务直接读取系统时间或复制状态推导逻辑；其二，创建学习计划时初始进度规则缺失，未覆盖需求中的创建边界和后续 AI 草稿导入入口。
+修正：保持当前任务范围不变，补充唯一可执行的接口边界。要求 `StudyPlanQuery.matches(...)` 与 `StudyPlanRepository.findBy(...)` 显式接收 `StudyPlanAnalysisService` 和 `LocalDate currentDate`，由 `StudyPlanService` 统一通过 `timeProvider.today()` 提供动态状态上下文；同时明确创建接口既支持默认 `Progress.zero()`，也支持显式初始进度参数供 AI 草稿导入复用，并将创建时 `0`、`100`、`-1`、`101` 初始进度及失败后仓储不变性纳入本轮测试。
+
+## R12 RETRY 实现学习计划查询、只读快照仓储与统计契约服务闭环
+原因：二次计划审查指出两个剩余分叉：其一，仓储层虽然要求返回“不可修改快照”，但没有明确是否允许把内部可变 `StudyPlan` 实体引用直接暴露给调用方；其二，完成/未完成数量统计的服务接口签名与返回形态未固定，仍可能导致 coder 自行扩展或遗漏。
+修正：继续保持当前任务范围不变，并把接口边界收束为唯一实现路径。要求 `StudyPlanRepository.findById(...)`、`findAll()`、`findBy(...)` 均返回脱离内部存储状态的 `StudyPlan` 快照，`save(...)` 也必须保存调用参数的副本或等价隔离结果，禁止外部通过仓储返回值或保存后仍持有的对象引用绕过 `StudyPlanService` 修改内部状态；同时明确统计接口仅做“全量计划”的动态状态统计，本轮固定公开方法为 `OperationResult<Integer> countCompletedPlans()` 与 `OperationResult<Integer> countIncompletePlans()`，二者统一基于 `timeProvider.today()` 和 `StudyPlanAnalysisService` 计算，不新增聚合 DTO，也不提供按查询条件过滤的统计重载。测试需补充仓储读写快照隔离和两个统计方法的成功/失败边界。
+
+## R12 RETRY 实现学习计划查询、只读快照仓储与统计契约服务闭环
+原因：三次计划审查指出两个最终契约冲突：其一，`StudyPlanService` 的“成功查询和写操作统一返回 `StudyPlanView` / `List<StudyPlanView>`”与固定统计接口 `OperationResult<Integer>` 同时存在，导致统计是否属于该统一规则不明确；其二，创建接口一面要求接收 `Progress initialProgress`，一面又要求对 `-1`、`101` 这类原始非法数值在服务层映射为 `VALIDATION_ERROR`，仍未收束到唯一公开 API 形态。
+修正：继续保持当前任务范围不变，并把服务接口进一步收束为唯一实现路径。要求 `StudyPlanService` 只有创建、查看、列表、组合筛选、修改详情、更新进度这类返回计划快照的方法成功时返回 `StudyPlanView` 或不可修改的 `List<StudyPlanView>`；删除固定返回 `OperationResult<Void>`，全量统计固定返回 `OperationResult<Integer>`，不再纳入快照返回规则。学习计划创建服务公开接口固定接收原始整数初始进度参数（`int`/`Integer` 或仅参数命名等价的同义签名），并保留一个不传初始进度、默认 `0` 的便捷重载；服务内部负责把原始数值转换为 `Progress.zero()` / `Progress.of(...)`，从而将 `0`、`100` 映射为成功，将 `-1`、`101` 和空必填字段稳定映射为 `OperationResult.failure(ErrorCode.VALIDATION_ERROR, ...)`。领域实体、仓储快照和视图仍统一使用 `Progress` 值对象表示合法进度。测试需补充服务创建重载、非法原始进度映射和统计接口不受快照返回规则约束的断言。
+
+## R12 RETRY 实现学习计划查询、只读快照仓储与统计契约服务闭环
+原因：四次计划审查指出仍有两个未收束的公开接口分叉：其一，创建/修改详情一侧要求服务边界统一把“开始日期晚于截止日期”映射为 `VALIDATION_ERROR`，但任务没有固定服务是接收原始开始日期与截止日期还是直接接收 `DateRange`；其二，更新进度仍未固定为接收原始整数，导致 `-1`、`101` 一类非法输入可能在服务调用前就无法表示，无法形成稳定错误映射与白盒测试契约。
+修正：继续保持当前任务范围不变，并把创建、修改详情、更新进度三个写接口全部收束到原始输入层。要求 `StudyPlanService` 的创建和修改详情公开接口必须接收原始 `LocalDate startDate`、`LocalDate endDate`（或唯一等价的原始请求对象），由服务内部构造 `DateRange` 并统一把开始日期晚于截止日期、空日期、空目标名称、非正预期小时数映射为 `OperationResult.failure(ErrorCode.VALIDATION_ERROR, ...)`；同时要求 `updateProgress(...)` 与创建初始进度规则一致，公开接口固定接收原始整数进度值，由服务内部转换为 `Progress.of(...)`。测试需补充创建/修改详情在非法日期范围下的失败路径与失败后仓储状态不变，以及更新进度对 `0`、`100`、`-1`、`101` 的成功/失败和失败后仓储不变性断言。
