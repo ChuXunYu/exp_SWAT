@@ -249,3 +249,14 @@
 ## R19 RETRY 实现 DeepSeek HTTP 客户端与 AI 协议错误映射
 原因：计划审查指出 `AiErrorMapperTest` 被要求覆盖未列明 4xx/3xx 的默认外部失败分类，但任务未明确这些默认状态码必须映射到哪个具体 `ErrorCode`，实现者可能在 `AI_BAD_REQUEST`、`AI_REMOTE_UNAVAILABLE`、`AI_NETWORK_ERROR` 或 `SYSTEM_ERROR` 之间自行选择，导致后续设计和测试没有唯一断言。
 修正：保持当前任务范围不变，在 `task_v19.md` 中固定未列明 HTTP 状态码映射契约：未列明 4xx 映射为 `AI_BAD_REQUEST`，未列明 3xx 映射为 `AI_REMOTE_UNAVAILABLE`，其他未列明非 2xx HTTP 状态映射为 `AI_REMOTE_UNAVAILABLE`；同时要求 `AiErrorMapperTest` 与 `DeepSeekAiClientTest` 按该唯一口径覆盖并断言。
+
+---
+
+## R20 PASSED 实现 DeepSeek HTTP 客户端与 AI 协议错误映射
+结果：新增 `assistant.ai.DeepSeekAiClient`、`AiHttpTransport`、`JdkAiHttpTransport`、`AiHttpRequest`、`AiHttpResponse`、`AiErrorMapper`，实现 DeepSeek/OpenAI 兼容请求构造、JSON 序列化与解析、可替换 HTTP 发送边界、HTTP 状态码和外部异常错误映射。
+测试：`mvn test` 通过；验证报告记录通过 757 个测试，失败 0 个，推送成功。
+
+## R20 NEW 实现 AI 结构化建议草稿模型、解析器与仓储基础
+任务：新增 AI 结构化建议的草稿类型、草稿状态、任务草稿项、学习计划草稿内容、草稿聚合根、草稿只读视图、草稿仓储契约、内存仓储和结构化建议解析器，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/ai/SuggestionDraftType.java`、`SuggestionDraftStatus.java`、`TaskDraftItem.java`、`StudyPlanDraftContent.java`、`SuggestionDraft.java`、`SuggestionDraftView.java`、`SuggestionDraftRepository.java`、`InMemorySuggestionDraftRepository.java`、`StructuredSuggestionParser.java`，以及对应测试 `SuggestionDraftTypeTest.java`、`SuggestionDraftStatusTest.java`、`TaskDraftItemTest.java`、`StudyPlanDraftContentTest.java`、`SuggestionDraftTest.java`、`SuggestionDraftViewTest.java`、`InMemorySuggestionDraftRepositoryTest.java`、`StructuredSuggestionParserTest.java`。
+选择理由：v18-v19 已完成 AI 问答编排、提示词构造和真实 DeepSeek 协议层；技术方案中下一条主线是“生成草稿、持有草稿、确认或取消、导入正式记录”。先实现结构化建议解析与草稿持有基础，可把 AI 原始 JSON 和正式任务/学习计划服务隔离开，并为后续 `DraftLifecycleService`、`DraftImportService` 和控制台确认流程提供稳定可测的中间表示。
+上下文：既有 `AiAssistantService` 可得到 AI 文本，`PromptBuilder` 已要求结构化场景返回单个 JSON 对象，`EntityId` 与 `IdGenerator` 可用于草稿编号，`OperationResult` 与 `ErrorCode.AI_MALFORMED_RESPONSE` 可用于解析失败返回语义；正式数据写入仍必须经由 `TaskService` 或 `StudyPlanService`，本轮不得直接写入正式业务仓储。技术方案要求结构化建议只允许 `TASK_DRAFT` 和 `STUDY_PLAN_DRAFT` 两类，解析器使用 Jackson `JsonNode`，优先解析完整 JSON 文本，也支持去除单个 fenced JSON 代码块后解析；根节点、类型字段、必要业务字段缺失或类型错误时返回 `AI_MALFORMED_RESPONSE` 且不创建草稿；解析成功只生成状态为 `CONFIRMABLE` 的 `SuggestionDraft`，草稿内容使用内部 DTO，不复用正式实体。任务草稿应表达一个或多个待办任务建议，学习计划草稿应表达一个学习目标、日期范围、预期投入小时、初始进度和可选拆解说明；草稿状态固定为 `CONFIRMABLE`、`CANCELLED`、`IMPORTED`，取消和标记已导入的状态迁移由聚合根保护，重复取消、取消后导入、导入后再次取消或导入均返回/抛出 `STATE_CONFLICT` 语义供后续服务转换。仓储默认使用内存 `LinkedHashMap<EntityId, SuggestionDraft>` 保持插入顺序，返回不可修改快照。本轮不实现 `DraftLifecycleService`、`DraftImportService`、确认导入正式记录、导入回滚、AI 服务自动创建草稿或控制台菜单；普通单元测试不得访问真实网络、真实 DeepSeek、真实 API Key、真实当前时间或外部文件。
