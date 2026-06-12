@@ -223,3 +223,14 @@
 ## R17 RETRY 实现数据查询与汇总统计及 AI 本地上下文基础
 原因：二次计划审查指出学习计划统计口径混淆：本轮摘要要求表达“本周学习计划统计”，但 `DashboardSummary` 与 `overviewText` 使用 `StudyPlanService.countCompletedPlans()` / `countIncompletePlans()` 的全量完成/未完成数量，可能生成本周计划数量与完成/未完成数量不属于同一集合的误导性上下文。
 修正：保持当前任务范围不变，将学习计划摘要字段收束为 `completedWeekStudyPlanCount` / `incompleteWeekStudyPlanCount`，要求 `SummaryService` 仅基于 `weekStudyPlans` 快照中的 `StudyPlanView.status()` 计算本周完成/未完成数量，不调用全量统计接口填充本周摘要；同步更新 `overviewText` 格式和 `SummaryServiceTest` 断言，覆盖本周计划数量与全量计划数量不同的场景。
+
+---
+
+## R18 PASSED 实现数据查询与汇总统计及 AI 本地上下文基础
+结果：新增 `assistant.summary.DashboardSummary`、`LocalContext`、`SummaryService`，实现今日任务与日程、本周学习计划、本月收支、笔记标签分布、固定格式 AI 本地上下文、错误传播和不可变快照边界。
+测试：`mvn test` 通过；验证报告记录通过 692 个测试，失败 0 个。
+
+## R18 NEW 实现 AI 配置、消息契约、提示词构造与问答编排基础
+任务：新增 AI 模块的配置值对象、配置加载器、客户端请求响应契约、提示词构造器、本地上下文提供接口和 AI 问答应用服务基础，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/ai/AiConfiguration.java`、`AiConfigurationLoader.java`、`AiRole.java`、`AiMessage.java`、`AiRequest.java`、`AiResponse.java`、`AiClient.java`、`AiScenario.java`、`ContextProvider.java`、`PromptBuilder.java`、`AiAssistantService.java`，以及对应测试 `AiConfigurationTest.java`、`AiConfigurationLoaderTest.java`、`AiMessageTest.java`、`AiRequestTest.java`、`AiResponseTest.java`、`PromptBuilderTest.java`、`AiAssistantServiceTest.java`。
+选择理由：汇总模块已经提供稳定 `LocalContext`，可以进入 AI 问答与建议功能。真实 DeepSeek HTTP 客户端和结构化草稿解析都依赖稳定的配置、内部消息 DTO、提示词格式、AI 客户端接口和服务层错误传播；先完成不访问网络的 AI 基础编排，可让后续 `DeepSeekAiClient`、结构化建议解析和控制台菜单只依赖清晰的本地契约。
+上下文：既有 `ErrorCode` 已包含 AI 配置、鉴权、限流、超时、远端不可用、网络、空响应和格式异常等分类，`OperationResult` 可作为 AI 服务边界返回语义，`SummaryService.buildLocalContext()` 已能生成 `LocalContext`。技术方案要求默认 base URL 为 `https://api.deepseek.com`、path 为 `/chat/completions`、默认模型为 `deepseek-v4-flash`、默认超时 20 秒，配置名为 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`、`DEEPSEEK_TIMEOUT_SECONDS`；普通单元测试必须直接构造配置或使用可控 map/properties，不读取真实环境变量、不访问真实 DeepSeek、不依赖真实 API Key。`PromptBuilder` 必须把场景、用户问题和 `LocalContext` 组装为确定性 messages，结构化建议场景需要明确要求返回单个 JSON 对象但本轮不解析 JSON、不创建草稿。`AiAssistantService` 通过 `ContextProvider` 获取本地上下文，调用 `PromptBuilder` 和 `AiClient`，成功返回 AI 文本；API Key 缺失返回 `AI_NOT_CONFIGURED`，上下文构建失败或客户端失败应稳定传播错误分类且不得修改任何本地业务数据。
