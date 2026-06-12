@@ -204,3 +204,22 @@
 任务：新增个人笔记模块的查询条件、只读视图、仓储契约、内存仓储和应用服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/note/NoteQuery.java`、`NoteView.java`、`NoteRepository.java`、`InMemoryNoteRepository.java`、`NoteService.java`，以及对应测试 `NoteQueryTest.java`、`NoteViewTest.java`、`InMemoryNoteRepositoryTest.java`、`NoteServiceTest.java`。
 选择理由：v15 已完成个人笔记领域实体和关键字搜索策略；笔记核心功能还缺少新增、查看、修改、删除、按关键字查询、按标签查询、组合筛选和面向汇总/AI 的只读服务入口。先补齐笔记服务闭环，可让后续汇总服务、AI 摘要上下文和控制台菜单通过稳定公开 API 读取笔记快照，而不直接暴露可变 `Note` 或仓储集合。
 上下文：既有 `Note` 负责标题、内容、创建日期和标签集合不变量，`NoteSearchPolicy` 负责关键字非空校验、标题/内容大小写不敏感匹配和标签语义精确匹配，`Tag` 负责标签原始文本清理与小写归一，`EntityId`、`IdGenerator`、`TimeProvider`、`OperationResult` 和 `ErrorCode` 已可支撑服务层生成编号、读取可控创建日期并返回稳定成功/失败结果。技术方案要求关键字为空返回 `VALIDATION_ERROR`，无匹配返回空集合，按标签查询复用 `Tag` 语义，修改或删除不存在笔记返回 `NOT_FOUND`，成功查询和写操作不得返回内部可变实体引用。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R17 PASSED 实现个人笔记查询、只读视图、仓储与服务闭环
+结果：新增 `assistant.note.NoteQuery`、`NoteView`、`NoteRepository`、`InMemoryNoteRepository`、`NoteService`，实现个人笔记新增、查看、列表、关键字查询、标签查询、组合筛选、修改、删除、错误映射、查询空结果和仓储/视图快照隔离。
+测试：`mvn clean test` 通过；验证报告记录通过 672 个测试，失败 0 个，推送成功。
+
+## R17 NEW 实现数据查询与汇总统计及 AI 本地上下文基础
+任务：新增汇总统计模块的摘要结果、AI 本地上下文和汇总服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/summary/DashboardSummary.java`、`LocalContext.java`、`SummaryService.java`，以及对应测试 `DashboardSummaryTest.java`、`LocalContextTest.java`、`SummaryServiceTest.java`。
+选择理由：任务、日程、学习计划、收支和笔记五个本地数据模块均已形成只读服务闭环，可以开始实现第 8 个核心功能“数据查询与汇总统计”。AI 问答、AI 笔记摘要和结构化建议后续都需要稳定的本地上下文输入；先实现只读汇总和 `LocalContext`，可避免 AI 模块直接拼接各业务服务结果或绕过服务层读取仓储。
+上下文：既有 `TaskService` 可按 `TaskQuery.byDueDate(today)` 返回今日任务视图，`ScheduleService` 可按日期返回带动态状态的今日日程视图，`StudyPlanService` 可按 `StudyPlanQuery.byPeriod(DateRange)` 返回本周相关计划并提供完成/未完成计数，`FinanceService` 可按 `TransactionQuery.byDateRange(DateRange)` 计算本月收支统计并返回记录视图，`NoteService` 可返回全部笔记视图和标签集合。`TimeProvider.today()` 已可提供可控当前日期；本周统计采用 ISO 周一到周日，本月统计采用当月第一天到最后一天；汇总模块必须只通过现有服务读取只读快照，不直接依赖各业务仓储或可变领域实体。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+## R17 RETRY 实现数据查询与汇总统计及 AI 本地上下文基础
+原因：计划审查指出 `LocalContext` 的公开结构仍使用“可包含”“简短文本字段或结构化字段”等开放描述，字段名称、字段类型、文本生成口径和结构化摘要边界未固定，后续 `assistant.ai` 的提示词构造与单元测试无法稳定依赖。
+修正：保持当前任务范围不变，将 `LocalContext` 收束为唯一 record 形态：`DashboardSummary dashboardSummary`、`String overviewText`、`List<String> todayTaskLines`、`todayScheduleLines`、`weekStudyPlanLines`、`monthTransactionLines`、`noteTagLines`。同时固定每个文本字段和明细行的生成格式、空数据返回空列表、列表/映射不可修改快照、失败传播和 `LocalContextTest` 必须覆盖的稳定断言。
+
+## R17 RETRY 实现数据查询与汇总统计及 AI 本地上下文基础
+原因：二次计划审查指出学习计划统计口径混淆：本轮摘要要求表达“本周学习计划统计”，但 `DashboardSummary` 与 `overviewText` 使用 `StudyPlanService.countCompletedPlans()` / `countIncompletePlans()` 的全量完成/未完成数量，可能生成本周计划数量与完成/未完成数量不属于同一集合的误导性上下文。
+修正：保持当前任务范围不变，将学习计划摘要字段收束为 `completedWeekStudyPlanCount` / `incompleteWeekStudyPlanCount`，要求 `SummaryService` 仅基于 `weekStudyPlans` 快照中的 `StudyPlanView.status()` 计算本周完成/未完成数量，不调用全量统计接口填充本周摘要；同步更新 `overviewText` 格式和 `SummaryServiceTest` 断言，覆盖本周计划数量与全量计划数量不同的场景。
