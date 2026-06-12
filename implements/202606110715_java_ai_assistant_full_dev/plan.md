@@ -275,3 +275,14 @@
 ## R21 RETRY 实现 AI 草稿生命周期与正式导入服务闭环
 原因：计划审查指出两个契约缺口：其一，v20 的 `TaskDraftItem` 允许 `dueDate == null`，但正式 `TaskService.createTask(...)` 与 `TaskView` 要求非空截止日期，若不收束会导致合法任务草稿导入行为在失败、默认填充或修改正式任务模型之间分叉；其二，“未知或不匹配状态防御路径”在当前封闭枚举和 `SuggestionDraft` 工厂保护下不可达，测试要求会迫使后续设计自行发明触发方式和错误码。
 修正：保持当前任务范围不变，在 `task_v21.md` 中固定任务草稿无截止日期的唯一导入口径：导入前完整校验所有 `TaskDraftItem.dueDate()` 均非空，任一缺失返回 `VALIDATION_ERROR`，不得调用 `TaskService.createTask(...)`，不得新增正式任务，草稿保持 `CONFIRMABLE`，且不引入默认日期、不修改正式任务模型；同时删除不可达未知枚举/内容不匹配测试要求，改为覆盖可达的 `importDraft(null)` 防御路径，并固定空草稿、空 id 与构造参数空引用的公开契约。
+
+---
+
+## R22 PASSED 实现 AI 草稿生命周期与正式导入服务闭环
+结果：新增 `assistant.ai.DraftImportService`、`DraftLifecycleService`，实现任务/学习计划草稿确认导入、取消、查询、列表、终态保护、任务批量导入回滚、无截止日期草稿校验和只读草稿视图返回边界。
+测试：`mvn test` 通过；验证报告记录通过 815 个测试，失败 0 个。
+
+## R22 NEW 实现控制台应用装配、主入口与基础菜单骨架
+任务：新增 `assistant.app` 控制台入口与应用装配基础，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/app/Main.java`、`ConsoleApplication.java`、`ApplicationServices.java`、`ApplicationFactory.java`、`DemoDataFactory.java`，以及对应测试 `ApplicationFactoryTest.java`、`DemoDataFactoryTest.java`、`ConsoleApplicationTest.java`。
+选择理由：8 个核心功能的领域、服务、汇总、AI 问答、DeepSeek 客户端和 AI 草稿导入链路已经完成，但技术方案和需求仍要求一个可运行、可演示、带清晰菜单或操作入口的 Java 命令行程序。先补齐应用装配、可选演示数据和主菜单命令分发骨架，可把服务层能力连接成 `main` 可启动的程序，并为后续细化各功能交互命令提供稳定入口。
+上下文：当前工程没有 `assistant.app` 包；既有服务包括 `TaskService`、`ScheduleService`、`StudyPlanService`、`FinanceService`、`NoteService`、`SummaryService`、`AiAssistantService`、`DraftLifecycleService`、`DraftImportService`，内存仓储和 `IncrementalIdGenerator`、`SystemTimeProvider`、`AiConfigurationLoader`、`DeepSeekAiClient`、`JdkAiHttpTransport` 均已可用于生产装配。技术方案要求启动层从环境变量和 JVM 系统属性读取 DeepSeek 配置，API Key 缺失时 AI 功能返回 `AI_NOT_CONFIGURED` 且本地功能可继续使用；演示数据可由 `DemoDataFactory` 可选装配，不读取真实用户文件；控制台层只处理菜单、输入解析和结果展示，不直接操作仓储集合、不直接调用 HTTP、不承载业务判断。普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间；测试应通过可控输入输出流、固定配置 map、固定时间和 fake AI 客户端验证装配、演示数据、退出命令、无效菜单、摘要展示入口和 AI 未配置提示等边界。
