@@ -234,3 +234,18 @@
 任务：新增 AI 模块的配置值对象、配置加载器、客户端请求响应契约、提示词构造器、本地上下文提供接口和 AI 问答应用服务基础，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/ai/AiConfiguration.java`、`AiConfigurationLoader.java`、`AiRole.java`、`AiMessage.java`、`AiRequest.java`、`AiResponse.java`、`AiClient.java`、`AiScenario.java`、`ContextProvider.java`、`PromptBuilder.java`、`AiAssistantService.java`，以及对应测试 `AiConfigurationTest.java`、`AiConfigurationLoaderTest.java`、`AiMessageTest.java`、`AiRequestTest.java`、`AiResponseTest.java`、`PromptBuilderTest.java`、`AiAssistantServiceTest.java`。
 选择理由：汇总模块已经提供稳定 `LocalContext`，可以进入 AI 问答与建议功能。真实 DeepSeek HTTP 客户端和结构化草稿解析都依赖稳定的配置、内部消息 DTO、提示词格式、AI 客户端接口和服务层错误传播；先完成不访问网络的 AI 基础编排，可让后续 `DeepSeekAiClient`、结构化建议解析和控制台菜单只依赖清晰的本地契约。
 上下文：既有 `ErrorCode` 已包含 AI 配置、鉴权、限流、超时、远端不可用、网络、空响应和格式异常等分类，`OperationResult` 可作为 AI 服务边界返回语义，`SummaryService.buildLocalContext()` 已能生成 `LocalContext`。技术方案要求默认 base URL 为 `https://api.deepseek.com`、path 为 `/chat/completions`、默认模型为 `deepseek-v4-flash`、默认超时 20 秒，配置名为 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`、`DEEPSEEK_TIMEOUT_SECONDS`；普通单元测试必须直接构造配置或使用可控 map/properties，不读取真实环境变量、不访问真实 DeepSeek、不依赖真实 API Key。`PromptBuilder` 必须把场景、用户问题和 `LocalContext` 组装为确定性 messages，结构化建议场景需要明确要求返回单个 JSON 对象但本轮不解析 JSON、不创建草稿。`AiAssistantService` 通过 `ContextProvider` 获取本地上下文，调用 `PromptBuilder` 和 `AiClient`，成功返回 AI 文本；API Key 缺失返回 `AI_NOT_CONFIGURED`，上下文构建失败或客户端失败应稳定传播错误分类且不得修改任何本地业务数据。
+
+---
+
+## R19 PASSED 实现 AI 配置、消息契约、提示词构造与问答编排基础
+结果：新增 `assistant.ai.AiConfiguration`、`AiConfigurationLoader`、`AiRole`、`AiMessage`、`AiRequest`、`AiResponse`、`AiClient`、`AiScenario`、`ContextProvider`、`PromptBuilder`、`AiAssistantService`，实现离线 AI 配置加载、聊天 DTO、提示词构造、上下文编排、客户端抽象和错误传播。
+测试：`mvn test` 通过；验证报告记录通过 735 个测试，失败 0 个。
+
+## R19 NEW 实现 DeepSeek HTTP 客户端与 AI 协议错误映射
+任务：新增真实 DeepSeek OpenAI 兼容 HTTP 客户端、可替换 HTTP 发送边界和协议错误映射，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/ai/DeepSeekAiClient.java`、`AiHttpTransport.java`、`JdkAiHttpTransport.java`、`AiHttpRequest.java`、`AiHttpResponse.java`、`AiErrorMapper.java`，以及对应测试 `DeepSeekAiClientTest.java`、`AiErrorMapperTest.java`、`JdkAiHttpTransportTest.java`。
+选择理由：v18 已完成 AI 配置、消息契约、提示词构造和 `AiClient` 抽象；AI 问答功能还缺少按 DeepSeek OpenAI 兼容接口发起请求、序列化 JSON、解析响应和把 HTTP/网络/超时/格式异常转换为稳定 `ErrorCode` 的基础设施。先完成真实客户端和错误映射，可让后续结构化建议解析、控制台 AI 菜单和可选集成测试复用同一协议层，而不在应用服务或控制台中处理 HTTP 细节。
+上下文：既有 `AiConfiguration` 提供 base URL、`/chat/completions` path、模型、API Key 和超时，`AiRequest` 保存模型、messages 和非流式标记，`AiMessage`/`AiRole` 提供 OpenAI 兼容角色，`AiResponse` 保存返回文本，`AiClient.chat(...)` 以 `OperationResult<AiResponse>` 作为边界。技术方案要求使用 JDK `java.net.http.HttpClient`，Jackson Databind 处理 JSON，请求使用 Bearer API Key、POST 到 `{baseUrl}{chatCompletionsPath}`，错误映射固定为：401/403 → `AI_AUTH_FAILED`，429 → `AI_RATE_LIMITED`，JDK 超时异常或 408/504 → `AI_TIMEOUT`，400/422 → `AI_BAD_REQUEST`，5xx → `AI_REMOTE_UNAVAILABLE`，网络 I/O → `AI_NETWORK_ERROR`，2xx 但响应体空或 choices/message/content 为空白 → `AI_EMPTY_RESPONSE`，JSON 结构异常或无法解析 → `AI_MALFORMED_RESPONSE`。普通单元测试不得访问真实网络、真实 DeepSeek 或真实 API Key；`DeepSeekAiClientTest` 必须通过 fake `AiHttpTransport` 注入 HTTP 响应和异常，验证请求 URL、Authorization 头、Content-Type、timeout、JSON 请求体、成功响应解析、全部错误映射和 `InterruptedException` 恢复中断标记。`JdkAiHttpTransportTest` 只验证可替换发送边界的请求转换与配置，不连接外网；真实 DeepSeek 连通性后续放入可选 `*IT` 或 integration profile。
+
+## R19 RETRY 实现 DeepSeek HTTP 客户端与 AI 协议错误映射
+原因：计划审查指出 `AiErrorMapperTest` 被要求覆盖未列明 4xx/3xx 的默认外部失败分类，但任务未明确这些默认状态码必须映射到哪个具体 `ErrorCode`，实现者可能在 `AI_BAD_REQUEST`、`AI_REMOTE_UNAVAILABLE`、`AI_NETWORK_ERROR` 或 `SYSTEM_ERROR` 之间自行选择，导致后续设计和测试没有唯一断言。
+修正：保持当前任务范围不变，在 `task_v19.md` 中固定未列明 HTTP 状态码映射契约：未列明 4xx 映射为 `AI_BAD_REQUEST`，未列明 3xx 映射为 `AI_REMOTE_UNAVAILABLE`，其他未列明非 2xx HTTP 状态映射为 `AI_REMOTE_UNAVAILABLE`；同时要求 `AiErrorMapperTest` 与 `DeepSeekAiClientTest` 按该唯一口径覆盖并断言。
