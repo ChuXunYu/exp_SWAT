@@ -163,3 +163,18 @@
 任务：新增收支记录模块的核心领域实体、类型枚举和统计结果值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/finance/TransactionType.java`、`java-ai-assistant/src/main/java/assistant/finance/TransactionRecord.java`、`java-ai-assistant/src/main/java/assistant/finance/FinanceStatistics.java`、`java-ai-assistant/src/test/java/assistant/finance/TransactionTypeTest.java`、`java-ai-assistant/src/test/java/assistant/finance/TransactionRecordTest.java`、`java-ai-assistant/src/test/java/assistant/finance/FinanceStatisticsTest.java`。
 选择理由：任务待办、日程提醒和学习计划三个核心模块已形成服务闭环，可以进入 8 个核心功能中的收支记录管理。既有金额值对象已完成，下一步应先固定收支方向、单条交易记录不变量和统计结果的收入/支出/结余语义，再在后续轮次接入查询、仓储、服务和统计计算组件，避免服务层直接散落类别清理、日期校验和结余计算规则。
 上下文：既有 `EntityId` 可作为收支记录唯一编号，`TransactionAmount` 已保证单笔金额大于 0 且最多两位小数，`MoneyValue` 已支持统计金额零值、负值、加减和两位小数展示，`DateRange` 可用于后续日期筛选。技术方案要求收支记录持有类型、金额、类别、日期和备注；收入与支出使用 `TransactionType` enum；收入总额、支出总额和结余由 `FinanceStatistics` 表示，空记录统计后续应返回三个零值，只有支出无收入时结余允许为负，统计计算禁止使用 `double`。本轮不实现 `TransactionQuery`、仓储、`FinanceService` 或 `FinanceStatisticsService`，但领域模型和统计结果必须为后续服务闭环提供稳定公开接口；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+---
+
+## R14 PASSED 实现收支记录领域模型与统计结果基础
+结果：新增 `assistant.finance.TransactionType`、`TransactionRecord`、`FinanceStatistics`，实现收入/支出方向、单条收支记录字段校验与文本规范化、详情修改原子性、收入总额/支出总额/结余一致性和负结余允许规则。
+测试：`mvn test` 通过；验证报告记录通过 526 个测试，失败 0 个，推送成功。
+
+## R14 NEW 实现收支记录查询、只读视图、仓储、服务与统计闭环
+任务：新增收支记录模块的查询条件、只读视图、仓储契约、内存仓储、应用服务和统计服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/finance/TransactionQuery.java`、`TransactionView.java`、`TransactionRepository.java`、`InMemoryTransactionRepository.java`、`FinanceService.java`、`FinanceStatisticsService.java`，以及对应测试 `TransactionQueryTest.java`、`TransactionViewTest.java`、`InMemoryTransactionRepositoryTest.java`、`FinanceServiceTest.java`、`FinanceStatisticsServiceTest.java`。
+选择理由：v13 已完成收支方向、单条记录不变量和统计结果值对象；收支记录核心功能还缺少记录收入、记录支出、查看、组合筛选、修改、删除和即时统计入口。先补齐收支服务闭环，可让后续汇总服务、AI 本地上下文和控制台菜单通过稳定公开 API 读取收支快照和统计结果，而不直接暴露可变 `TransactionRecord` 或仓储集合。
+上下文：既有 `TransactionRecord` 负责编号、类型、金额、类别、日期和备注不变量，`FinanceStatistics` 负责收入总额、支出总额和结余一致性，`TransactionAmount` 和 `MoneyValue` 负责金额精度，`DateRange` 负责左右闭日期筛选。技术方案要求查询条件组合支持类型、类别和日期范围，开始日期晚于结束日期作为输入错误，空记录统计返回三个零值，统计计算使用 `BigDecimal`/金额值对象禁止 `double`，删除记录后统计必须基于当前仓储状态重新计算。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+## R14 RETRY 实现收支记录查询、只读视图、仓储、服务与统计闭环
+原因：计划审查指出 `updateTransaction(EntityId id, TransactionType type, String amountText, String category, LocalDate date, String note)` 的未知收支类型错误映射未收束；在 enum 接口形态下，未知或空类型最可能表现为 `type == null`，若不明确服务层契约，后续实现可能让实体层 `NullPointerException` 或 `IllegalArgumentException` 泄漏给调用方。
+修正：保持当前任务范围不变，在 `task_v14.md` 中明确 `type == null` 必须由 `FinanceService` 映射为 `OperationResult.failure(ErrorCode.VALIDATION_ERROR, ...)`，不得向调用方泄漏运行时异常；同时要求 `FinanceServiceTest` 覆盖该失败路径，并验证失败后仓储状态不变。
