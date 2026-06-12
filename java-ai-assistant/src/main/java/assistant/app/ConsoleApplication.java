@@ -6,10 +6,12 @@ import assistant.common.DateRange;
 import assistant.common.DateTimeRange;
 import assistant.common.EntityId;
 import assistant.common.OperationResult;
+import assistant.common.Tag;
 import assistant.finance.FinanceStatistics;
 import assistant.finance.TransactionQuery;
 import assistant.finance.TransactionType;
 import assistant.finance.TransactionView;
+import assistant.note.NoteQuery;
 import assistant.note.NoteView;
 import assistant.schedule.ScheduleQuery;
 import assistant.schedule.ScheduleStatus;
@@ -30,9 +32,12 @@ import java.io.Writer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class ConsoleApplication {
     private final ApplicationServices services;
@@ -95,7 +100,7 @@ public final class ConsoleApplication {
             case "3" -> runScheduleMenu();
             case "4" -> runStudyPlanMenu();
             case "5" -> runFinanceMenu();
-            case "6" -> showNotes();
+            case "6" -> runNoteMenu();
             case "7" -> askAi();
             case "8" -> showDrafts();
             case "h", "help" -> printHelp();
@@ -1500,21 +1505,271 @@ public final class ConsoleApplication {
         return !query.hasTypeFilter() && !query.hasCategoryFilter() && !query.hasDateRangeFilter();
     }
 
-    private void showNotes() {
+    private void runNoteMenu() {
+        printNoteMenu();
+        boolean inNoteMenu = true;
+        while (running && inNoteMenu) {
+            String command = readLine("请输入笔记命令: ");
+            if (command == null) {
+                running = false;
+                return;
+            }
+            inNoteMenu = dispatchNoteCommand(command);
+            output.flush();
+        }
+    }
+
+    private void printNoteMenu() {
+        output.println();
+        output.println("笔记菜单");
+        output.println("l/list. 列表");
+        output.println("a/add. 新增");
+        output.println("v/view. 查看");
+        output.println("k/keyword. 关键字搜索");
+        output.println("t/tag. 标签搜索");
+        output.println("f/filter. 筛选");
+        output.println("u/update. 修改");
+        output.println("d/delete. 删除");
+        output.println("b/back. 返回主菜单");
+        output.println("h/help. 帮助");
+    }
+
+    private boolean dispatchNoteCommand(String rawCommand) {
+        String command = rawCommand.strip().toLowerCase(Locale.ROOT);
+        if (command.isEmpty()) {
+            output.println("请输入笔记命令。");
+            return true;
+        }
+        switch (command) {
+            case "l", "list" -> listNotes();
+            case "a", "add" -> addNote();
+            case "v", "view" -> viewNote();
+            case "k", "keyword" -> searchNotesByKeyword();
+            case "t", "tag" -> searchNotesByTag();
+            case "f", "filter" -> filterNotes();
+            case "u", "update" -> updateNote();
+            case "d", "delete" -> deleteNote();
+            case "b", "back" -> {
+                return false;
+            }
+            case "h", "help" -> printNoteMenu();
+            default -> {
+                output.println("未知笔记命令，请输入 h 查看帮助。");
+                printNoteMenu();
+            }
+        }
+        return running;
+    }
+
+    private void listNotes() {
         OperationResult<List<NoteView>> result = services.noteService().listNotes();
         if (!printResult(result)) {
             return;
         }
-        List<NoteView> notes = result.getPayload();
-        output.println("笔记列表");
+        printNoteList("笔记列表", result.getPayload());
+    }
+
+    private void addNote() {
+        String title = readNoteRawField("标题: ");
+        if (title == null) {
+            return;
+        }
+        String content = readNoteRawField("内容: ");
+        if (content == null) {
+            return;
+        }
+        String tagText = readNoteRawField("标签列表(逗号分隔，可空): ");
+        if (tagText == null) {
+            return;
+        }
+        printNoteResult(services.noteService().createNote(title, content, parseNoteTags(tagText)));
+    }
+
+    private void viewNote() {
+        ParsedInput<EntityId> id = readNoteId("笔记 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printNoteResult(services.noteService().getNote(id.value()));
+    }
+
+    private void searchNotesByKeyword() {
+        String keyword = readNoteRawField("关键字: ");
+        if (keyword == null) {
+            return;
+        }
+        if (keyword.isBlank()) {
+            printValidationError("关键字不能为空");
+            return;
+        }
+        OperationResult<List<NoteView>> result = services.noteService().searchByKeyword(keyword);
+        if (!printResult(result)) {
+            return;
+        }
+        printNoteList("笔记关键字搜索结果", result.getPayload());
+    }
+
+    private void searchNotesByTag() {
+        String tagText = readNoteRawField("标签: ");
+        if (tagText == null) {
+            return;
+        }
+        if (tagText.isBlank()) {
+            printValidationError("标签不能为空");
+            return;
+        }
+        OperationResult<List<NoteView>> result = services.noteService().searchByTag(tagText);
+        if (!printResult(result)) {
+            return;
+        }
+        printNoteList("笔记标签搜索结果", result.getPayload());
+    }
+
+    private void filterNotes() {
+        String keyword = readNoteRawField("关键字(可空): ");
+        if (keyword == null) {
+            return;
+        }
+        String tagText = readNoteRawField("标签(可空): ");
+        if (tagText == null) {
+            return;
+        }
+        boolean hasKeyword = !keyword.isBlank();
+        boolean hasTag = !tagText.isBlank();
+        if (!hasKeyword && !hasTag) {
+            printValidationError("关键字和标签至少填写一个");
+            return;
+        }
+
+        OperationResult<List<NoteView>> result;
+        if (hasKeyword && hasTag) {
+            try {
+                result = services.noteService().listNotes(NoteQuery.of(keyword, Tag.of(tagText)));
+            } catch (NullPointerException | IllegalArgumentException exception) {
+                printValidationError(stableNoteValidationMessage(exception.getMessage()));
+                return;
+            }
+        } else if (hasKeyword) {
+            result = services.noteService().searchByKeyword(keyword);
+        } else {
+            result = services.noteService().searchByTag(tagText);
+        }
+        if (!printResult(result)) {
+            return;
+        }
+        printNoteList("笔记筛选结果", result.getPayload());
+    }
+
+    private void updateNote() {
+        ParsedInput<EntityId> id = readNoteId("笔记 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        String title = readNoteRawField("标题: ");
+        if (title == null) {
+            return;
+        }
+        String content = readNoteRawField("内容: ");
+        if (content == null) {
+            return;
+        }
+        String tagText = readNoteRawField("标签列表(逗号分隔，可空): ");
+        if (tagText == null) {
+            return;
+        }
+        printNoteResult(services.noteService().updateNote(id.value(), title, content, parseNoteTags(tagText)));
+    }
+
+    private void deleteNote() {
+        ParsedInput<EntityId> id = readNoteId("笔记 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printResult(services.noteService().deleteNote(id.value()));
+    }
+
+    private void printNoteResult(OperationResult<NoteView> result) {
+        if (!printResult(result)) {
+            return;
+        }
+        printNoteDetail(result.getPayload());
+    }
+
+    private void printNoteList(String heading, List<NoteView> notes) {
+        output.println(heading);
         if (notes.isEmpty()) {
             output.println("暂无笔记");
             return;
         }
-        notes.stream().limit(10).forEach(note -> output.println(note.id().value()
+        notes.forEach(note -> output.println(note.id().value()
                 + " | " + note.title()
                 + " | " + note.createdDate()
-                + " | " + note.tags()));
+                + " | " + formatTags(note.tags())));
+    }
+
+    private void printNoteDetail(NoteView note) {
+        output.println("笔记详情");
+        output.println("ID: " + note.id().value());
+        output.println("标题: " + note.title());
+        output.println("内容: " + note.content());
+        output.println("创建日期: " + note.createdDate());
+        output.println("标签: " + formatTags(note.tags()));
+    }
+
+    private String readNoteRawField(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+        }
+        return value;
+    }
+
+    private ParsedInput<EntityId> readNoteId(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        EntityId id = parseNoteId(value);
+        return id == null ? ParsedInput.invalid() : ParsedInput.value(id);
+    }
+
+    private EntityId parseNoteId(String rawValue) {
+        try {
+            long value = Long.parseLong(rawValue.strip());
+            if (value <= 0) {
+                printValidationError("笔记 id 必须是正整数");
+                return null;
+            }
+            return new EntityId(value);
+        } catch (NumberFormatException exception) {
+            printValidationError("笔记 id 必须是正整数");
+            return null;
+        }
+    }
+
+    private Set<String> parseNoteTags(String rawValue) {
+        LinkedHashSet<String> tags = new LinkedHashSet<>();
+        for (String tag : rawValue.split(",")) {
+            String stripped = tag.strip();
+            if (!stripped.isEmpty()) {
+                tags.add(stripped);
+            }
+        }
+        return tags;
+    }
+
+    private String formatTags(Set<Tag> tags) {
+        return tags.stream()
+                .map(Tag::displayName)
+                .collect(Collectors.joining(", "));
+    }
+
+    private String stableNoteValidationMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "invalid note input";
+        }
+        return message;
     }
 
     private void askAi() {

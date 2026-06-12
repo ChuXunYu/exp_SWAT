@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,11 +16,15 @@ import assistant.common.EntityId;
 import assistant.common.ErrorCode;
 import assistant.common.MoneyValue;
 import assistant.common.OperationResult;
+import assistant.common.Tag;
 import assistant.common.TransactionAmount;
 import assistant.finance.FinanceStatistics;
 import assistant.finance.FinanceService;
 import assistant.finance.TransactionType;
 import assistant.finance.TransactionView;
+import assistant.note.NoteQuery;
+import assistant.note.NoteService;
+import assistant.note.NoteView;
 import assistant.schedule.ScheduleService;
 import assistant.study.StudyPlanService;
 import assistant.testability.FixedTimeProvider;
@@ -28,9 +33,12 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class ConsoleApplicationTest {
     @Test
@@ -62,7 +70,7 @@ class ConsoleApplicationTest {
 
     @Test
     void listCommandsDisplayEachCoreEntry() {
-        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\nb\n5\nb\n6\n8\nq\n");
+        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\nb\n5\nb\n6\nb\n8\nq\n");
 
         assertAll(
                 () -> assertContains(output, "任务菜单"),
@@ -70,13 +78,13 @@ class ConsoleApplicationTest {
                 () -> assertContains(output, "日程菜单"),
                 () -> assertContains(output, "学习计划菜单"),
                 () -> assertContains(output, "收支菜单"),
-                () -> assertContains(output, "笔记列表"),
+                () -> assertContains(output, "笔记菜单"),
                 () -> assertContains(output, "AI 草稿列表"));
     }
 
     @Test
     void listCommandsDisplayEmptyStateWithoutDemoData() {
-        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\nl\nb\n5\nl\nb\n6\n8\nq\n");
+        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\nl\nb\n5\nl\nb\n6\nl\nb\n8\nq\n");
 
         assertAll(
                 () -> assertContains(output, "暂无任务"),
@@ -1219,6 +1227,221 @@ class ConsoleApplicationTest {
     }
 
     @Test
+    void noteMenuAddsListsViewsUpdatesDeletesNote() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "6\na\n旧笔记\n旧内容\nstudy, life\nl\nv\n1\n"
+                        + "u\n1\n新笔记\n新内容\nwork\nd\n1\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "笔记详情"),
+                () -> assertContains(output, "标题: 旧笔记"),
+                () -> assertContains(output, "1 | 旧笔记 | 2026-01-15 | study, life"),
+                () -> assertContains(output, "标题: 新笔记"),
+                () -> assertContains(output, "内容: 新内容"),
+                () -> assertContains(output, "标签: work"),
+                () -> assertContains(output, "操作成功"),
+                () -> assertContains(output, "NOT_FOUND"));
+    }
+
+    @Test
+    void noteMenuSearchesByKeywordCaseInsensitively() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "6\na\nAlpha Plan\n正文\nwork\n"
+                        + "a\n普通笔记\n没有匹配\nlife\nk\nalpha\nb\nq\n");
+
+        String results = between(output, "笔记关键字搜索结果", "主菜单");
+        assertAll(
+                () -> assertContains(results, "Alpha Plan"),
+                () -> assertNotContains(results, "普通笔记"));
+    }
+
+    @Test
+    void noteMenuSearchesByTagUsingNormalizedTagSemantics() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "6\na\n标签笔记\n内容\nStudy\nt\nstudy\nb\nq\n");
+
+        String results = between(output, "笔记标签搜索结果", "主菜单");
+        assertAll(
+                () -> assertContains(results, "标签笔记"),
+                () -> assertContains(results, "study"));
+    }
+
+    @Test
+    void noteMenuFiltersByKeywordAndTagTogether() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "6\na\n匹配笔记\n包含 Alpha\nstudy\n"
+                        + "a\n只有关键字\nAlpha 内容\nlife\n"
+                        + "a\n只有标签\n普通内容\nstudy\nf\nalpha\nstudy\nb\nq\n");
+
+        String results = between(output, "笔记筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(results, "匹配笔记"),
+                () -> assertNotContains(results, "只有关键字"),
+                () -> assertNotContains(results, "只有标签"));
+    }
+
+    @Test
+    void noteMenuCreatesEmptyTagListAndParsesCommaSeparatedTags() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "6\na\n无标签笔记\n内容\n\n"
+                        + "a\n标签笔记\n内容\n Study, , life, study, LIFE \nl\nb\nq\n");
+
+        String list = between(output, "笔记列表", "主菜单");
+        assertAll(
+                () -> assertContains(list, "1 | 无标签笔记 | 2026-01-15 | "),
+                () -> assertContains(list, "2 | 标签笔记 | 2026-01-15 | study, life"));
+    }
+
+    @Test
+    void noteMenuPassesParsedTagsToNoteServiceWithoutNormalizingCase() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        NoteService noteService = mock(NoteService.class);
+        when(noteService.createNote(anyString(), anyString(), any()))
+                .thenReturn(OperationResult.success(noteView(1, "新增笔记", "新增内容", "study")));
+        when(noteService.updateNote(any(), anyString(), anyString(), any()))
+                .thenReturn(OperationResult.success(noteView(7, "修改笔记", "修改内容", "study")));
+        ApplicationServices services = withNoteService(baseServices, noteService);
+
+        runWithInput(
+                services,
+                "6\na\n新增笔记\n新增内容\n Study, , life, study, LIFE \n"
+                        + "u\n7\n修改笔记\n修改内容\n Study, , life, study, LIFE \nb\nq\n");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Set<String>> createdTags = ArgumentCaptor.forClass(Set.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Set<String>> updatedTags = ArgumentCaptor.forClass(Set.class);
+        verify(noteService).createNote(eq("新增笔记"), eq("新增内容"), createdTags.capture());
+        verify(noteService).updateNote(eq(new EntityId(7)), eq("修改笔记"), eq("修改内容"), updatedTags.capture());
+        assertAll(
+                () -> assertEquals(List.of("Study", "life", "study", "LIFE"), List.copyOf(createdTags.getValue())),
+                () -> assertEquals(List.of("Study", "life", "study", "LIFE"), List.copyOf(updatedTags.getValue())));
+    }
+
+    @Test
+    void noteMenuRejectsInvalidIdBeforeCallingNoteService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        NoteService noteService = mock(NoteService.class);
+        ApplicationServices services = withNoteService(baseServices, noteService);
+
+        String output = runWithInput(services, "6\nv\nabc\nu\n0\nd\n1.5\nv\n999999999999999999999\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "笔记 id 必须是正整数"));
+        verify(noteService, never()).getNote(any());
+        verify(noteService, never()).updateNote(any(), anyString(), anyString(), any());
+        verify(noteService, never()).deleteNote(any());
+    }
+
+    @Test
+    void noteMenuRejectsBlankRequiredKeywordAndTagBeforeCallingService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        NoteService noteService = mock(NoteService.class);
+        ApplicationServices services = withNoteService(baseServices, noteService);
+
+        String output = runWithInput(services, "6\nk\n  \nt\n \nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "关键字不能为空"),
+                () -> assertContains(output, "标签不能为空"));
+        verify(noteService, never()).searchByKeyword(anyString());
+        verify(noteService, never()).searchByTag(anyString());
+    }
+
+    @Test
+    void noteMenuRejectsEmptyCombinedFilterBeforeCallingService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        NoteService noteService = mock(NoteService.class);
+        ApplicationServices services = withNoteService(baseServices, noteService);
+
+        String output = runWithInput(services, "6\nf\n \n\nb\nq\n");
+
+        assertContains(output, "关键字和标签至少填写一个");
+        verify(noteService, never()).listNotes(any(NoteQuery.class));
+        verify(noteService, never()).searchByKeyword(anyString());
+        verify(noteService, never()).searchByTag(anyString());
+    }
+
+    @Test
+    void noteMenuDisplaysServiceValidationFailuresAndStaysInMenu() {
+        String output = runWithInput(servicesWithoutDemoData(), "6\na\n \n内容\nstudy\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "失败: VALIDATION_ERROR"),
+                () -> assertContains(output, "title must not be blank"),
+                () -> assertContains(output, "笔记列表"),
+                () -> assertContains(output, "暂无笔记"));
+    }
+
+    @Test
+    void noteMenuHandlesUnknownBlankHelpBackAndEof() {
+        String output = runWithInput(servicesWithoutDemoData(), "6\n?\n  \nh\nb\n1\nq\n");
+        String eofOutput = runWithInput(servicesWithoutDemoData(), "6\n");
+
+        assertAll(
+                () -> assertContains(output, "未知笔记命令，请输入 h 查看帮助。"),
+                () -> assertContains(output, "请输入笔记命令。"),
+                () -> assertContains(output, "笔记菜单"),
+                () -> assertContains(output, "今日任务数: 0"),
+                () -> assertContains(eofOutput, "笔记菜单"));
+    }
+
+    @Test
+    void noteMenuListsMoreThanTenNotesWithoutTruncation() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        NoteService noteService = mock(NoteService.class);
+        List<NoteView> notes = java.util.stream.LongStream.rangeClosed(1, 12)
+                .mapToObj(id -> noteView(id, "笔记" + id, "内容" + id, "tag" + id))
+                .toList();
+        when(noteService.listNotes()).thenReturn(OperationResult.success(notes));
+        ApplicationServices services = withNoteService(baseServices, noteService);
+
+        String output = runWithInput(services, "6\nl\nb\nq\n");
+
+        String list = between(output, "笔记列表", "主菜单");
+        assertAll(
+                () -> assertContains(list, "1 | 笔记1 | 2026-01-15 | tag1"),
+                () -> assertContains(list, "10 | 笔记10 | 2026-01-15 | tag10"),
+                () -> assertContains(list, "11 | 笔记11 | 2026-01-15 | tag11"),
+                () -> assertContains(list, "12 | 笔记12 | 2026-01-15 | tag12"));
+    }
+
+    @Test
+    void noteMenuCombinedFilterSingleFieldUsesEquivalentSearch() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        NoteService noteService = mock(NoteService.class);
+        when(noteService.searchByKeyword("alpha")).thenReturn(OperationResult.success(List.of()));
+        when(noteService.searchByTag("study")).thenReturn(OperationResult.success(List.of()));
+        ApplicationServices services = withNoteService(baseServices, noteService);
+
+        runWithInput(services, "6\nf\nalpha\n\nf\n\nstudy\nb\nq\n");
+
+        verify(noteService).searchByKeyword("alpha");
+        verify(noteService).searchByTag("study");
+        verify(noteService, never()).listNotes(any(NoteQuery.class));
+    }
+
+    @Test
+    void noteMenuCombinedFilterUsesNoteQueryWhenBothFieldsPresent() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        NoteService noteService = mock(NoteService.class);
+        when(noteService.listNotes(eq(NoteQuery.of("alpha", Tag.of("study")))))
+                .thenReturn(OperationResult.success(List.of(noteView(1, "匹配", "alpha", "study"))));
+        ApplicationServices services = withNoteService(baseServices, noteService);
+
+        String output = runWithInput(services, "6\nf\nalpha\nstudy\nb\nq\n");
+
+        assertContains(output, "笔记筛选结果");
+        verify(noteService).listNotes(eq(NoteQuery.of("alpha", Tag.of("study"))));
+    }
+
+    @Test
     void aiCommandShowsNotConfiguredAndContinues() {
         String output = runWithInput(servicesWithDemoData(), "7\n今天有什么安排？\n1\nq\n");
 
@@ -1290,6 +1513,36 @@ class ConsoleApplicationTest {
                 "测试",
                 LocalDate.of(2026, 1, 15),
                 note);
+    }
+
+    private static NoteView noteView(long id, String title, String content, String... tags) {
+        return new NoteView(
+                new EntityId(id),
+                title,
+                content,
+                LocalDate.of(2026, 1, 15),
+                tagSet(tags));
+    }
+
+    private static LinkedHashSet<Tag> tagSet(String... values) {
+        LinkedHashSet<Tag> tags = new LinkedHashSet<>();
+        for (String value : values) {
+            tags.add(Tag.of(value));
+        }
+        return tags;
+    }
+
+    private static ApplicationServices withNoteService(ApplicationServices baseServices, NoteService noteService) {
+        return new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                baseServices.financeService(),
+                noteService,
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
     }
 
     private static FinanceStatistics statistics(String income, String expense) {

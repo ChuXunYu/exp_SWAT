@@ -330,3 +330,14 @@
 任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的收支记录菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内复用或抽取小型输入解析辅助方法，但不得修改 `FinanceService`、`TransactionQuery`、`TransactionView`、`TransactionType`、`FinanceStatistics` 的公开契约。
 选择理由：任务待办、日程提醒和学习计划三个控制台入口已具备完整可输入、可演示、可产生明确结果的闭环；主菜单命令 `5` 的收支入口仍停留在一次性列表和统计展示，尚不能通过控制台记录收入/支出、查看、修改、删除、按类型/类别/日期范围筛选或计算筛选统计。收支记录管理是需求中的第 6 个核心功能，也是金额计算、日期范围判断和统计同步的测试重点；下一步应补齐收支完整交互入口，沿用已验证的子菜单、字段解析、错误展示、EOF 和返回主菜单模式。
 上下文：既有 `ConsoleApplication` 主菜单中命令 `5` 当前调用 `showTransactions()`，只执行 `FinanceService.listTransactions()` 和 `calculateStatistics()` 并展示前 10 条记录；既有 `FinanceService` 已提供 `recordIncome(String amountText, String category, LocalDate date, String note)`、`recordExpense(String amountText, String category, LocalDate date, String note)`、`getTransaction(EntityId id)`、`listTransactions()`、`listTransactions(TransactionQuery query)`、`updateTransaction(EntityId id, TransactionType type, String amountText, String category, LocalDate date, String note)`、`deleteTransaction(EntityId id)`、`calculateStatistics()`、`calculateStatistics(TransactionQuery query)`，服务边界已负责金额、类别、日期、类型、未找到和验证错误映射。`TransactionQuery` 支持 `TransactionType`、类别和 `DateRange` 组合筛选，`TransactionType` 包含 `INCOME`、`EXPENSE`，`DateRange` 要求开始日期不晚于结束日期。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问收支仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
+
+---
+
+## R27 PASSED 实现控制台收支记录完整交互入口
+结果：扩展 `assistant.app.ConsoleApplication` 的收支入口，将主菜单命令 `5` 接入可循环收支子菜单，实现收入/支出记录、查看、列表、筛选、修改、删除、全量/筛选统计、输入校验、帮助、返回主菜单和 EOF 处理；同步补充控制台交互测试。
+测试：`mvn clean test` 通过；验证报告记录通过 918 个测试，失败 0 个。
+
+## R27 NEW 实现控制台个人笔记完整交互入口
+任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的个人笔记菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内复用或抽取小型输入解析辅助方法，但不得修改 `NoteService`、`NoteQuery`、`NoteView`、`Tag` 的公开契约。
+选择理由：任务待办、日程提醒、学习计划和收支记录四个本地控制台入口已具备完整可输入、可演示、可产生明确结果的闭环；主菜单命令 `6` 的笔记入口仍停留在一次性列表展示，尚不能通过控制台新增、查看、修改、删除、关键字搜索、标签搜索或组合筛选。个人笔记是需求中的第 7 个核心本地功能，并且为汇总标签分布和 AI 本地上下文提供输入；下一步应补齐笔记完整交互入口，沿用已验证的子菜单、字段解析、错误展示、EOF 和返回主菜单模式。
+上下文：既有 `ConsoleApplication` 主菜单中命令 `6` 当前调用 `showNotes()`，只执行 `NoteService.listNotes()` 并展示前 10 条笔记；既有 `NoteService` 已提供 `createNote(String title, String content, Set<String> tagTexts)`、`getNote(EntityId id)`、`listNotes()`、`listNotes(NoteQuery query)`、`searchByKeyword(String keyword)`、`searchByTag(String tagText)`、`updateNote(EntityId id, String title, String content, Set<String> tagTexts)`、`deleteNote(EntityId id)`，服务边界已负责标题、内容、标签、关键字、未找到和验证错误映射。`NoteQuery` 支持关键字与 `Tag` 组合筛选，`Tag` 负责标签首尾空白清理、空标签拒绝和小写归一；控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问笔记仓储或可变实体。普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
