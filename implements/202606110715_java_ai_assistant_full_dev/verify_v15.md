@@ -8,7 +8,7 @@ PASSED
 - 失败：0
 
 ## 推送结果
-PASSED：提交 05d90d7 已成功推送到 origin/202606110715_java_ai_assistant_full_dev。
+PASSED：本轮提交已成功推送到 origin/202606110715_java_ai_assistant_full_dev。
 
 ## 测试执行日志
 
