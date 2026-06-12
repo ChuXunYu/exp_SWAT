@@ -7,6 +7,8 @@ import assistant.common.DateTimeRange;
 import assistant.common.EntityId;
 import assistant.common.OperationResult;
 import assistant.finance.FinanceStatistics;
+import assistant.finance.TransactionQuery;
+import assistant.finance.TransactionType;
 import assistant.finance.TransactionView;
 import assistant.note.NoteView;
 import assistant.schedule.ScheduleQuery;
@@ -92,7 +94,7 @@ public final class ConsoleApplication {
             case "2" -> runTaskMenu();
             case "3" -> runScheduleMenu();
             case "4" -> runStudyPlanMenu();
-            case "5" -> showTransactions();
+            case "5" -> runFinanceMenu();
             case "6" -> showNotes();
             case "7" -> askAi();
             case "8" -> showDrafts();
@@ -1122,7 +1124,63 @@ public final class ConsoleApplication {
         }
     }
 
-    private void showTransactions() {
+    private void runFinanceMenu() {
+        printFinanceMenu();
+        boolean inFinanceMenu = true;
+        while (running && inFinanceMenu) {
+            String command = readLine("请输入收支命令: ");
+            if (command == null) {
+                running = false;
+                return;
+            }
+            inFinanceMenu = dispatchFinanceCommand(command);
+            output.flush();
+        }
+    }
+
+    private void printFinanceMenu() {
+        output.println();
+        output.println("收支菜单");
+        output.println("l/list. 列表");
+        output.println("i/income. 记录收入");
+        output.println("e/expense. 记录支出");
+        output.println("v/view. 查看");
+        output.println("f/filter. 筛选");
+        output.println("u/update. 修改");
+        output.println("d/delete. 删除");
+        output.println("s/statistics. 统计");
+        output.println("b/back. 返回主菜单");
+        output.println("h/help. 帮助");
+    }
+
+    private boolean dispatchFinanceCommand(String rawCommand) {
+        String command = rawCommand.strip().toLowerCase(Locale.ROOT);
+        if (command.isEmpty()) {
+            output.println("请输入收支命令。");
+            return true;
+        }
+        switch (command) {
+            case "l", "list" -> listTransactions();
+            case "i", "income" -> recordIncome();
+            case "e", "expense" -> recordExpense();
+            case "v", "view" -> viewTransaction();
+            case "f", "filter" -> filterTransactions();
+            case "u", "update" -> updateTransaction();
+            case "d", "delete" -> deleteTransaction();
+            case "s", "statistics" -> showFinanceStatistics();
+            case "b", "back" -> {
+                return false;
+            }
+            case "h", "help" -> printFinanceMenu();
+            default -> {
+                output.println("未知收支命令，请输入 h 查看帮助。");
+                printFinanceMenu();
+            }
+        }
+        return running;
+    }
+
+    private void listTransactions() {
         OperationResult<List<TransactionView>> transactionsResult = services.financeService().listTransactions();
         if (!printResult(transactionsResult)) {
             return;
@@ -1131,21 +1189,315 @@ public final class ConsoleApplication {
         if (!printResult(statisticsResult)) {
             return;
         }
-        FinanceStatistics statistics = statisticsResult.getPayload();
-        output.println("收支统计");
-        output.println("收入: " + statistics.totalIncome().toPlainString());
-        output.println("支出: " + statistics.totalExpense().toPlainString());
-        output.println("结余: " + statistics.balance().toPlainString());
-        List<TransactionView> transactions = transactionsResult.getPayload();
+        printFinanceStatistics("收支统计", statisticsResult.getPayload());
+        printTransactionList("收支记录列表", transactionsResult.getPayload());
+    }
+
+    private void recordIncome() {
+        String amountText = readFinanceRawField("金额: ");
+        if (amountText == null) {
+            return;
+        }
+        String category = readFinanceRawField("类别: ");
+        if (category == null) {
+            return;
+        }
+        ParsedInput<LocalDate> date = readRequiredTransactionDate("日期(yyyy-MM-dd): ");
+        if (!date.hasValue()) {
+            return;
+        }
+        String note = readFinanceRawField("备注: ");
+        if (note == null) {
+            return;
+        }
+        printTransactionResult(services.financeService().recordIncome(amountText, category, date.value(), note));
+    }
+
+    private void recordExpense() {
+        String amountText = readFinanceRawField("金额: ");
+        if (amountText == null) {
+            return;
+        }
+        String category = readFinanceRawField("类别: ");
+        if (category == null) {
+            return;
+        }
+        ParsedInput<LocalDate> date = readRequiredTransactionDate("日期(yyyy-MM-dd): ");
+        if (!date.hasValue()) {
+            return;
+        }
+        String note = readFinanceRawField("备注: ");
+        if (note == null) {
+            return;
+        }
+        printTransactionResult(services.financeService().recordExpense(amountText, category, date.value(), note));
+    }
+
+    private void viewTransaction() {
+        ParsedInput<EntityId> id = readFinanceId("收支记录 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printTransactionResult(services.financeService().getTransaction(id.value()));
+    }
+
+    private void filterTransactions() {
+        ParsedInput<TransactionQuery> query = readOptionalTransactionQuery();
+        if (!query.hasValue()) {
+            return;
+        }
+        OperationResult<List<TransactionView>> transactionsResult =
+                services.financeService().listTransactions(query.value());
+        if (!printResult(transactionsResult)) {
+            return;
+        }
+        OperationResult<FinanceStatistics> statisticsResult =
+                services.financeService().calculateStatistics(query.value());
+        if (!printResult(statisticsResult)) {
+            return;
+        }
+        printFinanceStatistics("收支筛选统计", statisticsResult.getPayload());
+        printTransactionList("收支筛选结果", transactionsResult.getPayload());
+    }
+
+    private void updateTransaction() {
+        ParsedInput<EntityId> id = readFinanceId("收支记录 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        ParsedInput<TransactionType> type = readRequiredTransactionType("类型(INCOME/EXPENSE): ");
+        if (!type.hasValue()) {
+            return;
+        }
+        String amountText = readFinanceRawField("金额: ");
+        if (amountText == null) {
+            return;
+        }
+        String category = readFinanceRawField("类别: ");
+        if (category == null) {
+            return;
+        }
+        ParsedInput<LocalDate> date = readRequiredTransactionDate("日期(yyyy-MM-dd): ");
+        if (!date.hasValue()) {
+            return;
+        }
+        String note = readFinanceRawField("备注: ");
+        if (note == null) {
+            return;
+        }
+        printTransactionResult(services.financeService().updateTransaction(
+                id.value(), type.value(), amountText, category, date.value(), note));
+    }
+
+    private void deleteTransaction() {
+        ParsedInput<EntityId> id = readFinanceId("收支记录 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printResult(services.financeService().deleteTransaction(id.value()));
+    }
+
+    private void showFinanceStatistics() {
+        ParsedInput<TransactionQuery> query = readOptionalTransactionQuery();
+        if (!query.hasValue()) {
+            return;
+        }
+        TransactionQuery value = query.value();
+        OperationResult<FinanceStatistics> result =
+                hasNoFinanceFilter(value)
+                        ? services.financeService().calculateStatistics()
+                        : services.financeService().calculateStatistics(value);
+        if (!printResult(result)) {
+            return;
+        }
+        printFinanceStatistics("收支统计", result.getPayload());
+    }
+
+    private void printTransactionResult(OperationResult<TransactionView> result) {
+        if (!printResult(result)) {
+            return;
+        }
+        printTransactionDetail(result.getPayload());
+    }
+
+    private void printTransactionList(String heading, List<TransactionView> transactions) {
+        output.println(heading);
         if (transactions.isEmpty()) {
             output.println("暂无收支记录");
             return;
         }
-        transactions.stream().limit(10).forEach(transaction -> output.println(transaction.id().value()
+        transactions.forEach(transaction -> output.println(transaction.id().value()
                 + " | " + transaction.type()
                 + " | " + transaction.amount().value().toPlainString()
                 + " | " + transaction.category()
-                + " | " + transaction.date()));
+                + " | " + transaction.date()
+                + " | " + transaction.note()));
+    }
+
+    private void printTransactionDetail(TransactionView transaction) {
+        output.println("收支记录详情");
+        output.println("ID: " + transaction.id().value());
+        output.println("类型: " + transaction.type());
+        output.println("金额: " + transaction.amount().value().toPlainString());
+        output.println("类别: " + transaction.category());
+        output.println("日期: " + transaction.date());
+        output.println("备注: " + transaction.note());
+    }
+
+    private void printFinanceStatistics(String heading, FinanceStatistics statistics) {
+        output.println(heading);
+        output.println("收入: " + statistics.totalIncome().toPlainString());
+        output.println("支出: " + statistics.totalExpense().toPlainString());
+        output.println("结余: " + statistics.balance().toPlainString());
+    }
+
+    private String readFinanceRawField(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+        }
+        return value;
+    }
+
+    private ParsedInput<EntityId> readFinanceId(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        EntityId id = parseFinanceId(value);
+        return id == null ? ParsedInput.invalid() : ParsedInput.value(id);
+    }
+
+    private ParsedInput<TransactionType> readRequiredTransactionType(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        TransactionType type = parseTransactionType(value);
+        return type == null ? ParsedInput.invalid() : ParsedInput.value(type);
+    }
+
+    private ParsedInput<TransactionType> readOptionalTransactionType(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        TransactionType type = parseTransactionType(value);
+        return type == null ? ParsedInput.invalid() : ParsedInput.value(type);
+    }
+
+    private ParsedInput<LocalDate> readRequiredTransactionDate(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        LocalDate date = parseTransactionDate(value);
+        return date == null ? ParsedInput.invalid() : ParsedInput.value(date);
+    }
+
+    private ParsedInput<LocalDate> readOptionalTransactionDate(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        LocalDate date = parseTransactionDate(value);
+        return date == null ? ParsedInput.invalid() : ParsedInput.value(date);
+    }
+
+    private ParsedInput<DateRange> readOptionalTransactionDateRange(String startPrompt, String endPrompt) {
+        ParsedInput<LocalDate> start = readOptionalTransactionDate(startPrompt);
+        if (start.isInvalid() || start.isEof()) {
+            return start.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        ParsedInput<LocalDate> end = readOptionalTransactionDate(endPrompt);
+        if (end.isInvalid() || end.isEof()) {
+            return end.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        if (start.isEmpty() && end.isEmpty()) {
+            return ParsedInput.empty();
+        }
+        if (start.isEmpty() || end.isEmpty()) {
+            printValidationError("收支开始日期和结束日期必须同时填写或同时为空");
+            return ParsedInput.invalid();
+        }
+        try {
+            return ParsedInput.value(new DateRange(start.value(), end.value()));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("收支结束日期不能早于开始日期");
+            return ParsedInput.invalid();
+        }
+    }
+
+    private TransactionQuery buildTransactionQuery(TransactionType type, String category, DateRange dateRange) {
+        return TransactionQuery.of(type, category == null || category.isBlank() ? null : category, dateRange);
+    }
+
+    private ParsedInput<TransactionQuery> readOptionalTransactionQuery() {
+        ParsedInput<TransactionType> type = readOptionalTransactionType("类型(INCOME/EXPENSE，可空): ");
+        if (type.isInvalid() || type.isEof()) {
+            return type.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        String category = readFinanceRawField("类别(可空): ");
+        if (category == null) {
+            return ParsedInput.eof();
+        }
+        ParsedInput<DateRange> dateRange = readOptionalTransactionDateRange(
+                "开始日期(yyyy-MM-dd，可空): ",
+                "结束日期(yyyy-MM-dd，可空): ");
+        if (dateRange.isInvalid() || dateRange.isEof()) {
+            return dateRange.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        return ParsedInput.value(buildTransactionQuery(
+                type.hasValue() ? type.value() : null,
+                category,
+                dateRange.hasValue() ? dateRange.value() : null));
+    }
+
+    private EntityId parseFinanceId(String rawValue) {
+        try {
+            long value = Long.parseLong(rawValue.strip());
+            if (value <= 0) {
+                printValidationError("收支记录 id 必须是正整数");
+                return null;
+            }
+            return new EntityId(value);
+        } catch (NumberFormatException exception) {
+            printValidationError("收支记录 id 必须是正整数");
+            return null;
+        }
+    }
+
+    private TransactionType parseTransactionType(String rawValue) {
+        try {
+            return TransactionType.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("收支类型必须是 INCOME 或 EXPENSE");
+            return null;
+        }
+    }
+
+    private LocalDate parseTransactionDate(String rawValue) {
+        try {
+            return LocalDate.parse(rawValue.strip());
+        } catch (DateTimeParseException exception) {
+            printValidationError("收支日期格式必须是 yyyy-MM-dd");
+            return null;
+        }
+    }
+
+    private boolean hasNoFinanceFilter(TransactionQuery query) {
+        return !query.hasTypeFilter() && !query.hasCategoryFilter() && !query.hasDateRangeFilter();
     }
 
     private void showNotes() {

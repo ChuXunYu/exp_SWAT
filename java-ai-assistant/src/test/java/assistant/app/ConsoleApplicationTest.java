@@ -3,18 +3,30 @@ package assistant.app;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import assistant.common.EntityId;
 import assistant.common.ErrorCode;
+import assistant.common.MoneyValue;
 import assistant.common.OperationResult;
+import assistant.common.TransactionAmount;
+import assistant.finance.FinanceStatistics;
 import assistant.finance.FinanceService;
+import assistant.finance.TransactionType;
+import assistant.finance.TransactionView;
 import assistant.schedule.ScheduleService;
 import assistant.study.StudyPlanService;
 import assistant.testability.FixedTimeProvider;
 import assistant.task.TaskService;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -50,21 +62,21 @@ class ConsoleApplicationTest {
 
     @Test
     void listCommandsDisplayEachCoreEntry() {
-        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\nb\n5\n6\n8\nq\n");
+        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\nb\n5\nb\n6\n8\nq\n");
 
         assertAll(
                 () -> assertContains(output, "任务菜单"),
                 () -> assertContains(output, "l/list. 列表"),
                 () -> assertContains(output, "日程菜单"),
                 () -> assertContains(output, "学习计划菜单"),
-                () -> assertContains(output, "收支统计"),
+                () -> assertContains(output, "收支菜单"),
                 () -> assertContains(output, "笔记列表"),
                 () -> assertContains(output, "AI 草稿列表"));
     }
 
     @Test
     void listCommandsDisplayEmptyStateWithoutDemoData() {
-        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\nl\nb\n5\n6\n8\nq\n");
+        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\nl\nb\n5\nl\nb\n6\n8\nq\n");
 
         assertAll(
                 () -> assertContains(output, "暂无任务"),
@@ -833,11 +845,377 @@ class ConsoleApplicationTest {
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
-        String output = runWithInput(services, "5\nq\n");
+        String output = runWithInput(services, "5\nl\nb\nq\n");
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
                 () -> assertContains(output, "statistics failed"));
+    }
+
+    @Test
+    void financeMenuAddsIncomeExpenseAndSummaryReflectsBalance() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\ni\n1000.00\n工资\n2026-01-15\n一月工资\n"
+                        + "e\n120.50\n餐饮\n2026-01-15\n午餐\n"
+                        + "l\ns\n\n\n\n\nb\n1\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "1 | INCOME | 1000.00 | 工资 | 2026-01-15 | 一月工资"),
+                () -> assertContains(output, "2 | EXPENSE | 120.50 | 餐饮 | 2026-01-15 | 午餐"),
+                () -> assertContains(output, "收入: 1000.00"),
+                () -> assertContains(output, "支出: 120.50"),
+                () -> assertContains(output, "结余: 879.50"),
+                () -> assertContains(output, "本月收入: 1000.00"),
+                () -> assertContains(output, "本月支出: 120.50"),
+                () -> assertContains(output, "本月结余: 879.50"));
+    }
+
+    @Test
+    void financeMenuViewsUpdatesAndDeletesTransaction() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\ni\n100.00\n奖金\n2026-01-10\n旧备注\n"
+                        + "v\n1\nu\n1\nexpense\n80.25\n交通\n2026-01-11\n新备注\n"
+                        + "d\n1\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "类型: INCOME"),
+                () -> assertContains(output, "金额: 100.00"),
+                () -> assertContains(output, "类型: EXPENSE"),
+                () -> assertContains(output, "金额: 80.25"),
+                () -> assertContains(output, "类别: 交通"),
+                () -> assertContains(output, "日期: 2026-01-11"),
+                () -> assertContains(output, "备注: 新备注"),
+                () -> assertContains(output, "操作成功"),
+                () -> assertContains(output, "NOT_FOUND"));
+    }
+
+    @Test
+    void financeMenuFiltersByTypeCategoryAndDateRange() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\ni\n300.00\n工资\n2026-01-15\n匹配收入\n"
+                        + "e\n50.00\n餐饮\n2026-01-20\n非匹配支出\n"
+                        + "f\nincome\n工资\n2026-01-01\n2026-01-31\nb\nq\n");
+
+        String filtered = between(output, "收支筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(output, "收支筛选统计"),
+                () -> assertContains(output, "收入: 300.00"),
+                () -> assertContains(output, "支出: 0.00"),
+                () -> assertContains(filtered, "匹配收入"),
+                () -> assertNotContains(filtered, "非匹配支出"));
+    }
+
+    @Test
+    void financeMenuFilterEmptyFieldsListAllTransactions() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\ni\n10.00\nA\n2026-01-10\n第一\n"
+                        + "e\n20.00\nB\n2026-02-01\n第二\nf\n\n\n\n\nb\nq\n");
+
+        String filtered = between(output, "收支筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "第一"),
+                () -> assertContains(filtered, "第二"));
+    }
+
+    @Test
+    void financeMenuStatisticsSupportsEmptyAndFilteredQuery() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\ni\n200.00\n工资\n2026-01-10\n收入\n"
+                        + "e\n60.00\n餐饮\n2026-01-15\n支出\n"
+                        + "s\n\n\n\n\ns\nexpense\n餐饮\n2026-01-01\n2026-01-31\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "收入: 200.00"),
+                () -> assertContains(output, "支出: 60.00"),
+                () -> assertContains(output, "结余: 140.00"),
+                () -> assertContains(output, "收入: 0.00"),
+                () -> assertContains(output, "结余: -60.00"));
+    }
+
+    @Test
+    void financeMenuAcceptsLongCommandAliasesAndCaseInsensitiveType() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\nincome\n55.00\n礼金\n2026-01-15\n别名记录\n"
+                        + "view\n1\nupdate\n1\nExPeNsE\n12.00\n礼金\n2026-01-16\n已改\n"
+                        + "filter\nexpense\n礼金\n2026-01-01\n2026-01-31\nlist\ndelete\n1\nstatistics\n\n\n\n\nback\nquit\n");
+
+        String filtered = between(output, "收支筛选结果", "收支统计");
+        assertAll(
+                () -> assertContains(output, "类型: INCOME"),
+                () -> assertContains(output, "类型: EXPENSE"),
+                () -> assertContains(filtered, "已改"),
+                () -> assertContains(output, "操作成功"));
+    }
+
+    @Test
+    void financeMenuRejectsInvalidIdWithoutWriteOperation() {
+        String output = runWithInput(servicesWithoutDemoData(), "5\nv\nabc\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支记录 id 必须是正整数"),
+                () -> assertContains(output, "暂无收支记录"));
+    }
+
+    @Test
+    void financeMenuRejectsInvalidIdBeforeCallingFinanceService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        FinanceService financeService = mock(FinanceService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                financeService,
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "5\nv\n0\nu\nabc\nd\n1.5\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支记录 id 必须是正整数"));
+        verifyNoInteractions(financeService);
+    }
+
+    @Test
+    void financeMenuRejectsInvalidTypeBeforeCallingFinanceService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        FinanceService financeService = mock(FinanceService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                financeService,
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "5\nf\ntransfer\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支类型必须是 INCOME 或 EXPENSE"));
+        verifyNoInteractions(financeService);
+    }
+
+    @Test
+    void financeMenuRejectsInvalidUpdateTypeBeforeCallingWriteService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        FinanceService financeService = mock(FinanceService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                financeService,
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "5\nu\n1\ntransfer\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支类型必须是 INCOME 或 EXPENSE"));
+        verify(financeService, never()).updateTransaction(
+                any(),
+                any(),
+                anyString(),
+                anyString(),
+                any(),
+                anyString());
+    }
+
+    @Test
+    void financeMenuRejectsInvalidDateBeforeWriteOperation() {
+        String output = runWithInput(servicesWithoutDemoData(), "5\ni\n10.00\n工资\nbad-date\nl\nb\nq\n");
+
+        String list = between(output, "收支记录列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支日期格式必须是 yyyy-MM-dd"),
+                () -> assertNotContains(list, "工资"));
+    }
+
+    @Test
+    void financeMenuRejectsInvalidDateBeforeCallingFinanceService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        FinanceService financeService = mock(FinanceService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                financeService,
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "5\ni\n10.00\n工资\nbad-date\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支日期格式必须是 yyyy-MM-dd"));
+        verifyNoInteractions(financeService);
+    }
+
+    @Test
+    void financeMenuListsMoreThanTenTransactionsWithoutTruncation() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        FinanceService financeService = mock(FinanceService.class);
+        List<TransactionView> transactions = java.util.stream.LongStream.rangeClosed(1, 12)
+                .mapToObj(id -> transactionView(id, "记录" + id))
+                .toList();
+        when(financeService.listTransactions()).thenReturn(OperationResult.success(transactions));
+        when(financeService.calculateStatistics()).thenReturn(OperationResult.success(statistics("78.00", "0.00")));
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                financeService,
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "5\nl\nb\nq\n");
+
+        String list = between(output, "收支记录列表", "主菜单");
+        assertAll(
+                () -> assertContains(list, "1 | INCOME | 1.00 | 测试 | 2026-01-15 | 记录1"),
+                () -> assertContains(list, "10 | INCOME | 10.00 | 测试 | 2026-01-15 | 记录10"),
+                () -> assertContains(list, "11 | INCOME | 11.00 | 测试 | 2026-01-15 | 记录11"),
+                () -> assertContains(list, "12 | INCOME | 12.00 | 测试 | 2026-01-15 | 记录12"));
+    }
+
+    @Test
+    void financeMenuRejectsFilterSingleDateWithoutServiceCall() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        FinanceService financeService = mock(FinanceService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                financeService,
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "5\nf\n\n\n2026-01-01\n\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支开始日期和结束日期必须同时填写或同时为空"));
+        verifyNoInteractions(financeService);
+    }
+
+    @Test
+    void financeMenuRejectsFilterEndBeforeStartWithoutServiceCall() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        FinanceService financeService = mock(FinanceService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                financeService,
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "5\nf\n\n\n2026-01-20\n2026-01-10\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "收支结束日期不能早于开始日期"));
+        verifyNoInteractions(financeService);
+    }
+
+    @Test
+    void financeMenuShowsAmountValidationFailuresFromService() {
+        String output = runWithInput(servicesWithoutDemoData(), "5\ni\n0\n工资\n2026-01-15\n坏金额\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "value must be positive"),
+                () -> assertContains(output, "暂无收支记录"));
+    }
+
+    @Test
+    void financeMenuShowsMissingTransactionFailures() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\nv\n99\nu\n99\nincome\n10.00\n工资\n2026-01-15\n无\nd\n99\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "NOT_FOUND"),
+                () -> assertNotContains(output, "操作成功"));
+    }
+
+    @Test
+    void financeMenuDeleteRecomputesStatistics() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\ni\n100.00\n工资\n2026-01-15\n收入\n"
+                        + "e\n30.00\n餐饮\n2026-01-15\n支出\ns\n\n\n\n\nd\n2\ns\n\n\n\n\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "支出: 30.00"),
+                () -> assertContains(output, "结余: 70.00"),
+                () -> assertContains(output, "支出: 0.00"),
+                () -> assertContains(output, "结余: 100.00"));
+    }
+
+    @Test
+    void financeMenuUnknownHelpBackAndMainMenuContinuation() {
+        String output = runWithInput(servicesWithoutDemoData(), "5\n?\nh\nb\n1\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "未知收支命令，请输入 h 查看帮助。"),
+                () -> assertContains(output, "收支菜单"),
+                () -> assertContains(output, "今日日程数: 0"));
+    }
+
+    @Test
+    void financeMenuBlankCommandPromptsAgainAndStaysInFinanceMenu() {
+        String output = runWithInput(servicesWithoutDemoData(), "5\n  \nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "请输入收支命令。"),
+                () -> assertContains(output, "收支记录列表"));
+    }
+
+    @Test
+    void financeMenuExitsOnEofDuringCommandRead() {
+        String output = runWithInput(servicesWithoutDemoData(), "5\n");
+
+        assertContains(output, "收支菜单");
+    }
+
+    @Test
+    void financeMenuExitsOnEofDuringIncomeFields() {
+        String output = runWithInput(servicesWithoutDemoData(), "5\ni\n100.00\n工资\n");
+
+        assertAll(
+                () -> assertContains(output, "收支菜单"),
+                () -> assertNotContains(output, "收支记录详情"));
     }
 
     @Test
@@ -902,6 +1280,20 @@ class ConsoleApplicationTest {
         StringWriter output = new StringWriter();
         new ConsoleApplication(services, new StringReader(input), output).run();
         return output.toString();
+    }
+
+    private static TransactionView transactionView(long id, String note) {
+        return new TransactionView(
+                new EntityId(id),
+                TransactionType.INCOME,
+                TransactionAmount.of(id + ".00"),
+                "测试",
+                LocalDate.of(2026, 1, 15),
+                note);
+    }
+
+    private static FinanceStatistics statistics(String income, String expense) {
+        return FinanceStatistics.of(MoneyValue.of(income), MoneyValue.of(expense));
     }
 
     private static void assertContains(String text, String expected) {
