@@ -152,3 +152,14 @@
 ## R12 RETRY 实现学习计划查询、只读快照仓储与统计契约服务闭环
 原因：四次计划审查指出仍有两个未收束的公开接口分叉：其一，创建/修改详情一侧要求服务边界统一把“开始日期晚于截止日期”映射为 `VALIDATION_ERROR`，但任务没有固定服务是接收原始开始日期与截止日期还是直接接收 `DateRange`；其二，更新进度仍未固定为接收原始整数，导致 `-1`、`101` 一类非法输入可能在服务调用前就无法表示，无法形成稳定错误映射与白盒测试契约。
 修正：继续保持当前任务范围不变，并把创建、修改详情、更新进度三个写接口全部收束到原始输入层。要求 `StudyPlanService` 的创建和修改详情公开接口必须接收原始 `LocalDate startDate`、`LocalDate endDate`（或唯一等价的原始请求对象），由服务内部构造 `DateRange` 并统一把开始日期晚于截止日期、空日期、空目标名称、非正预期小时数映射为 `OperationResult.failure(ErrorCode.VALIDATION_ERROR, ...)`；同时要求 `updateProgress(...)` 与创建初始进度规则一致，公开接口固定接收原始整数进度值，由服务内部转换为 `Progress.of(...)`。测试需补充创建/修改详情在非法日期范围下的失败路径与失败后仓储状态不变，以及更新进度对 `0`、`100`、`-1`、`101` 的成功/失败和失败后仓储不变性断言。
+
+---
+
+## R13 PASSED 实现学习计划查询、只读快照仓储与统计契约服务闭环
+结果：新增 `assistant.study.StudyPlanQuery`、`StudyPlanView`、`StudyPlanRepository`、`InMemoryStudyPlanRepository`、`StudyPlanService`，实现学习计划创建、查看、列表、组合筛选、修改详情、更新进度、删除、完成/未完成数量统计、动态状态投影、输入错误映射和仓储快照隔离。
+测试：`mvn test` 通过；验证报告记录通过 497 个测试，失败 0 个，推送成功。
+
+## R13 NEW 实现收支记录领域模型与统计结果基础
+任务：新增收支记录模块的核心领域实体、类型枚举和统计结果值对象，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/finance/TransactionType.java`、`java-ai-assistant/src/main/java/assistant/finance/TransactionRecord.java`、`java-ai-assistant/src/main/java/assistant/finance/FinanceStatistics.java`、`java-ai-assistant/src/test/java/assistant/finance/TransactionTypeTest.java`、`java-ai-assistant/src/test/java/assistant/finance/TransactionRecordTest.java`、`java-ai-assistant/src/test/java/assistant/finance/FinanceStatisticsTest.java`。
+选择理由：任务待办、日程提醒和学习计划三个核心模块已形成服务闭环，可以进入 8 个核心功能中的收支记录管理。既有金额值对象已完成，下一步应先固定收支方向、单条交易记录不变量和统计结果的收入/支出/结余语义，再在后续轮次接入查询、仓储、服务和统计计算组件，避免服务层直接散落类别清理、日期校验和结余计算规则。
+上下文：既有 `EntityId` 可作为收支记录唯一编号，`TransactionAmount` 已保证单笔金额大于 0 且最多两位小数，`MoneyValue` 已支持统计金额零值、负值、加减和两位小数展示，`DateRange` 可用于后续日期筛选。技术方案要求收支记录持有类型、金额、类别、日期和备注；收入与支出使用 `TransactionType` enum；收入总额、支出总额和结余由 `FinanceStatistics` 表示，空记录统计后续应返回三个零值，只有支出无收入时结余允许为负，统计计算禁止使用 `double`。本轮不实现 `TransactionQuery`、仓储、`FinanceService` 或 `FinanceStatisticsService`，但领域模型和统计结果必须为后续服务闭环提供稳定公开接口；普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
