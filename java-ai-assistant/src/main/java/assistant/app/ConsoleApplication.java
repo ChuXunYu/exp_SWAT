@@ -2,11 +2,14 @@ package assistant.app;
 
 import assistant.ai.AiScenario;
 import assistant.ai.SuggestionDraftView;
+import assistant.common.DateTimeRange;
 import assistant.common.EntityId;
 import assistant.common.OperationResult;
 import assistant.finance.FinanceStatistics;
 import assistant.finance.TransactionView;
 import assistant.note.NoteView;
+import assistant.schedule.ScheduleQuery;
+import assistant.schedule.ScheduleStatus;
 import assistant.schedule.ScheduleView;
 import assistant.study.StudyPlanView;
 import assistant.summary.DashboardSummary;
@@ -20,6 +23,7 @@ import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
@@ -83,7 +87,7 @@ public final class ConsoleApplication {
         switch (command) {
             case "1" -> showSummary();
             case "2" -> runTaskMenu();
-            case "3" -> showSchedules();
+            case "3" -> runScheduleMenu();
             case "4" -> showStudyPlans();
             case "5" -> showTransactions();
             case "6" -> showNotes();
@@ -433,23 +437,292 @@ public final class ConsoleApplication {
         output.println("失败: VALIDATION_ERROR - " + message);
     }
 
-    private void showSchedules() {
+    private void runScheduleMenu() {
+        printScheduleMenu();
+        boolean inScheduleMenu = true;
+        while (running && inScheduleMenu) {
+            String command = readLine("请输入日程命令: ");
+            if (command == null) {
+                running = false;
+                return;
+            }
+            inScheduleMenu = dispatchScheduleCommand(command);
+            output.flush();
+        }
+    }
+
+    private void printScheduleMenu() {
+        output.println();
+        output.println("日程菜单");
+        output.println("l/list. 列表");
+        output.println("a/add. 新增");
+        output.println("v/view. 查看");
+        output.println("f/filter. 筛选");
+        output.println("u/update. 修改");
+        output.println("d/delete. 删除");
+        output.println("b/back. 返回主菜单");
+        output.println("h/help. 帮助");
+    }
+
+    private boolean dispatchScheduleCommand(String rawCommand) {
+        String command = rawCommand.strip().toLowerCase(Locale.ROOT);
+        if (command.isEmpty()) {
+            output.println("请输入日程命令。");
+            return true;
+        }
+        switch (command) {
+            case "l", "list" -> listSchedules();
+            case "a", "add" -> addSchedule();
+            case "v", "view" -> viewSchedule();
+            case "f", "filter" -> filterSchedules();
+            case "u", "update" -> updateSchedule();
+            case "d", "delete" -> deleteSchedule();
+            case "b", "back" -> {
+                return false;
+            }
+            case "h", "help" -> printScheduleMenu();
+            default -> {
+                output.println("未知日程命令，请输入 h 查看帮助。");
+                printScheduleMenu();
+            }
+        }
+        return running;
+    }
+
+    private void listSchedules() {
         OperationResult<List<ScheduleView>> result = services.scheduleService().listSchedules();
         if (!printResult(result)) {
             return;
         }
-        List<ScheduleView> schedules = result.getPayload();
-        output.println("日程列表");
+        printScheduleList("日程列表", result.getPayload());
+    }
+
+    private void addSchedule() {
+        String name = readScheduleRawField("名称: ");
+        if (name == null) {
+            return;
+        }
+        ParsedInput<DateTimeRange> timeRange = readScheduleTimeRange(
+                "开始时间(yyyy-MM-ddTHH:mm): ",
+                "结束时间(yyyy-MM-ddTHH:mm): ");
+        if (!timeRange.hasValue()) {
+            return;
+        }
+        String location = readScheduleRawField("地点: ");
+        if (location == null) {
+            return;
+        }
+        String note = readScheduleRawField("备注: ");
+        if (note == null) {
+            return;
+        }
+        printScheduleResult(services.scheduleService().createSchedule(name, timeRange.value(), location, note));
+    }
+
+    private void viewSchedule() {
+        ParsedInput<EntityId> id = readScheduleId("日程 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printScheduleResult(services.scheduleService().getSchedule(id.value()));
+    }
+
+    private void filterSchedules() {
+        ParsedInput<LocalDate> date = readOptionalScheduleDate("日期(yyyy-MM-dd，可空): ");
+        if (date.isInvalid() || date.isEof()) {
+            return;
+        }
+        ParsedInput<ScheduleStatus> status = readOptionalScheduleStatus("状态(UPCOMING/ONGOING/EXPIRED，可空): ");
+        if (status.isInvalid() || status.isEof()) {
+            return;
+        }
+        ScheduleQuery query = ScheduleQuery.of(
+                date.hasValue() ? date.value() : null,
+                status.hasValue() ? status.value() : null);
+        OperationResult<List<ScheduleView>> result = services.scheduleService().listSchedules(query);
+        if (!printResult(result)) {
+            return;
+        }
+        printScheduleList("日程筛选结果", result.getPayload());
+    }
+
+    private void updateSchedule() {
+        ParsedInput<EntityId> id = readScheduleId("日程 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        String name = readScheduleRawField("名称: ");
+        if (name == null) {
+            return;
+        }
+        ParsedInput<DateTimeRange> timeRange = readScheduleTimeRange(
+                "开始时间(yyyy-MM-ddTHH:mm): ",
+                "结束时间(yyyy-MM-ddTHH:mm): ");
+        if (!timeRange.hasValue()) {
+            return;
+        }
+        String location = readScheduleRawField("地点: ");
+        if (location == null) {
+            return;
+        }
+        String note = readScheduleRawField("备注: ");
+        if (note == null) {
+            return;
+        }
+        printScheduleResult(services.scheduleService().updateSchedule(
+                id.value(), name, timeRange.value(), location, note));
+    }
+
+    private void deleteSchedule() {
+        ParsedInput<EntityId> id = readScheduleId("日程 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printResult(services.scheduleService().deleteSchedule(id.value()));
+    }
+
+    private void printScheduleResult(OperationResult<ScheduleView> result) {
+        if (!printResult(result)) {
+            return;
+        }
+        printScheduleDetail(result.getPayload());
+    }
+
+    private void printScheduleList(String heading, List<ScheduleView> schedules) {
+        output.println(heading);
         if (schedules.isEmpty()) {
             output.println("暂无日程");
             return;
         }
-        schedules.stream().limit(10).forEach(schedule -> output.println(schedule.id().value()
+        schedules.forEach(schedule -> output.println(schedule.id().value()
                 + " | " + schedule.name()
                 + " | " + schedule.status()
                 + " | " + schedule.startDateTime()
                 + " ~ " + schedule.endDateTime()
                 + " | " + schedule.location()));
+    }
+
+    private void printScheduleDetail(ScheduleView schedule) {
+        output.println("日程详情");
+        output.println("ID: " + schedule.id().value());
+        output.println("名称: " + schedule.name());
+        output.println("状态: " + schedule.status());
+        output.println("开始时间: " + schedule.startDateTime());
+        output.println("结束时间: " + schedule.endDateTime());
+        output.println("地点: " + schedule.location());
+        output.println("备注: " + schedule.note());
+    }
+
+    private String readScheduleRawField(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+        }
+        return value;
+    }
+
+    private ParsedInput<EntityId> readScheduleId(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        EntityId id = parseScheduleId(value);
+        return id == null ? ParsedInput.invalid() : ParsedInput.value(id);
+    }
+
+    private ParsedInput<LocalDateTime> readRequiredScheduleDateTime(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        LocalDateTime dateTime = parseScheduleDateTime(value);
+        return dateTime == null ? ParsedInput.invalid() : ParsedInput.value(dateTime);
+    }
+
+    private ParsedInput<LocalDate> readOptionalScheduleDate(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        LocalDate date = parseScheduleDate(value);
+        return date == null ? ParsedInput.invalid() : ParsedInput.value(date);
+    }
+
+    private ParsedInput<ScheduleStatus> readOptionalScheduleStatus(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        ScheduleStatus status = parseScheduleStatus(value);
+        return status == null ? ParsedInput.invalid() : ParsedInput.value(status);
+    }
+
+    private ParsedInput<DateTimeRange> readScheduleTimeRange(String startPrompt, String endPrompt) {
+        ParsedInput<LocalDateTime> start = readRequiredScheduleDateTime(startPrompt);
+        if (!start.hasValue()) {
+            return start.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        ParsedInput<LocalDateTime> end = readRequiredScheduleDateTime(endPrompt);
+        if (!end.hasValue()) {
+            return end.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        try {
+            return ParsedInput.value(new DateTimeRange(start.value(), end.value()));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("结束时间必须晚于开始时间");
+            return ParsedInput.invalid();
+        }
+    }
+
+    private EntityId parseScheduleId(String rawValue) {
+        try {
+            long value = Long.parseLong(rawValue.strip());
+            if (value <= 0) {
+                printValidationError("日程 id 必须是正整数");
+                return null;
+            }
+            return new EntityId(value);
+        } catch (NumberFormatException exception) {
+            printValidationError("日程 id 必须是正整数");
+            return null;
+        }
+    }
+
+    private LocalDateTime parseScheduleDateTime(String rawValue) {
+        try {
+            return LocalDateTime.parse(rawValue.strip());
+        } catch (DateTimeParseException exception) {
+            printValidationError("日程时间格式必须是 yyyy-MM-ddTHH:mm");
+            return null;
+        }
+    }
+
+    private LocalDate parseScheduleDate(String rawValue) {
+        try {
+            return LocalDate.parse(rawValue.strip());
+        } catch (DateTimeParseException exception) {
+            printValidationError("日程日期格式必须是 yyyy-MM-dd");
+            return null;
+        }
+    }
+
+    private ScheduleStatus parseScheduleStatus(String rawValue) {
+        try {
+            return ScheduleStatus.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("状态必须是 UPCOMING、ONGOING 或 EXPIRED");
+            return null;
+        }
     }
 
     private void showStudyPlans() {

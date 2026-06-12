@@ -297,3 +297,14 @@
 任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的任务待办菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内新增小型包可见输入解析辅助类型或方法，但不得修改 `TaskService` 公开契约。
 选择理由：v22 让应用可以启动并展示 8 个核心功能入口，但任务、日程、学习计划、收支、笔记等本地功能在控制台层仍以列表/占位展示为主，尚未满足需求中“每个核心功能可演示、可输入、可产生明确结果”的交互验收口径。任务待办是最基础且状态链路最明确的本地模块，先把任务入口做成完整 CRUD + 状态迁移 + 筛选闭环，可为后续日程、学习计划、收支和笔记控制台交互复用同一输入解析、错误展示和菜单返回模式。
 上下文：既有 `ConsoleApplication` 主菜单中命令 `2` 当前只调用 `TaskService.listTasks()` 并展示前 10 条任务；既有 `TaskService` 已提供 `createTask(String title, String description, TaskPriority priority, LocalDate dueDate)`、`getTask(EntityId id)`、`listTasks()`、`listTasks(TaskQuery query)`、`updateTask(EntityId id, String title, String description, TaskPriority priority, LocalDate dueDate)`、`deleteTask(EntityId id)`、`markTaskCompleted(EntityId id)`、`reopenTask(EntityId id)`，服务边界已负责业务校验和错误码映射。`TaskPriority` 和 `TaskStatus` 为 enum，`TaskQuery` 支持状态、优先级和截止日期组合筛选，`EntityId` 要求正整数。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问任务仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
+
+---
+
+## R24 PASSED 实现控制台任务待办完整交互入口
+结果：扩展 `assistant.app.ConsoleApplication` 的任务入口，将主菜单命令 `2` 接入可循环任务子菜单，实现任务新增、查看、列表、筛选、修改、删除、标记完成、撤销完成、输入校验、帮助、返回主菜单和 EOF 处理；同步补充控制台交互测试。
+测试：`mvn test` / `mvn clean test` 通过；验证报告记录通过 857 个测试，失败 0 个。
+
+## R24 NEW 实现控制台日程提醒完整交互入口
+任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的日程提醒菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内抽取或复用小型输入解析辅助方法，但不得修改 `ScheduleService`、`ScheduleQuery`、`ScheduleView` 的公开契约。
+选择理由：v23 已把任务待办做成完整可输入、可演示、可产生明确结果的控制台闭环；主菜单命令 `3` 的日程入口仍停留在一次性列表展示，尚不能通过控制台新增、查看、修改、删除、按日期/状态筛选或演示冲突拒绝。日程提醒是需求中的第 4 个核心功能，具备时间范围解析、动态状态和冲突判断等高价值白盒路径；在任务菜单模式稳定后，下一步应补齐日程完整交互入口，并沿用已验证的菜单、错误展示、EOF 和返回主菜单模式。
+上下文：既有 `ConsoleApplication` 主菜单中命令 `3` 当前调用 `showSchedules()`，只执行 `ScheduleService.listSchedules()` 并展示前 10 条日程；既有 `ScheduleService` 已提供 `createSchedule(String name, DateTimeRange timeRange, String location, String note)`、`getSchedule(EntityId id)`、`listSchedules()`、`listSchedules(ScheduleQuery query)`、`listSchedulesByDate(LocalDate date)`、`updateSchedule(EntityId id, String name, DateTimeRange timeRange, String location, String note)`、`deleteSchedule(EntityId id)`，服务边界已负责名称、时间区间、冲突、未找到和验证错误映射。`ScheduleQuery` 支持日期和 `ScheduleStatus` 组合筛选，`ScheduleStatus` 包含 `UPCOMING`、`ONGOING`、`EXPIRED`，`DateTimeRange` 要求结束时间晚于开始时间且使用左闭右开语义。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问日程仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
