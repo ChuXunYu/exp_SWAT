@@ -6,7 +6,7 @@ PASSED
 ## 统计
 - 通过：526
 - 失败：0
-- 推送：待执行
+- 推送：成功（origin/202606110715_java_ai_assistant_full_dev，提交 8350d60）
 
 ## 测试执行日志
 
