@@ -193,3 +193,14 @@
 ## R15 RETRY 实现个人笔记领域模型与搜索策略基础
 原因：计划审查指出两个契约缺口：其一，`NoteSearchPolicy` 的标题和内容关键字匹配只写为“建议采用大小写不敏感”，与测试覆盖大小写行为之间存在实现分叉；其二，替换全部标签时没有明确失败原子性，输入集合包含 `null` 或非法标签时可能污染原有标签集合。
 修正：保持当前任务范围不变，固定唯一可执行语义。要求标题和内容关键字匹配必须使用 `Locale.ROOT` 大小写不敏感包含匹配，标签匹配必须通过 `Tag.of(keyword)` 与标签集合按归一语义精确比较；同时要求替换全部标签必须先完整校验输入集合引用、元素非空和所有标签有效性，再替换内部状态，任何非法输入都必须保持原标签集合不变。测试需补充大小写不敏感断言和标签替换失败后状态不变性。
+
+---
+
+## R16 PASSED 实现个人笔记领域模型与搜索策略基础
+结果：新增 `assistant.note.Note`、`NoteSearchPolicy`，实现个人笔记标题/内容/创建日期/标签集合不变量、标签快照隔离、内容更新与标签替换原子性、关键字大小写不敏感文本匹配和标签语义精确匹配。
+测试：`mvn test` 通过；验证报告记录通过 619 个测试，失败 0 个，推送成功。
+
+## R16 NEW 实现个人笔记查询、只读视图、仓储与服务闭环
+任务：新增个人笔记模块的查询条件、只读视图、仓储契约、内存仓储和应用服务，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/note/NoteQuery.java`、`NoteView.java`、`NoteRepository.java`、`InMemoryNoteRepository.java`、`NoteService.java`，以及对应测试 `NoteQueryTest.java`、`NoteViewTest.java`、`InMemoryNoteRepositoryTest.java`、`NoteServiceTest.java`。
+选择理由：v15 已完成个人笔记领域实体和关键字搜索策略；笔记核心功能还缺少新增、查看、修改、删除、按关键字查询、按标签查询、组合筛选和面向汇总/AI 的只读服务入口。先补齐笔记服务闭环，可让后续汇总服务、AI 摘要上下文和控制台菜单通过稳定公开 API 读取笔记快照，而不直接暴露可变 `Note` 或仓储集合。
+上下文：既有 `Note` 负责标题、内容、创建日期和标签集合不变量，`NoteSearchPolicy` 负责关键字非空校验、标题/内容大小写不敏感匹配和标签语义精确匹配，`Tag` 负责标签原始文本清理与小写归一，`EntityId`、`IdGenerator`、`TimeProvider`、`OperationResult` 和 `ErrorCode` 已可支撑服务层生成编号、读取可控创建日期并返回稳定成功/失败结果。技术方案要求关键字为空返回 `VALIDATION_ERROR`，无匹配返回空集合，按标签查询复用 `Tag` 语义，修改或删除不存在笔记返回 `NOT_FOUND`，成功查询和写操作不得返回内部可变实体引用。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
