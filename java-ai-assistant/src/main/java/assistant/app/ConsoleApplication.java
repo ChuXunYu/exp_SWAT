@@ -1,7 +1,9 @@
 package assistant.app;
 
 import assistant.ai.AiScenario;
+import assistant.ai.StudyPlanDraftContent;
 import assistant.ai.SuggestionDraftView;
+import assistant.ai.TaskDraftItem;
 import assistant.common.DateRange;
 import assistant.common.DateTimeRange;
 import assistant.common.EntityId;
@@ -102,7 +104,7 @@ public final class ConsoleApplication {
             case "5" -> runFinanceMenu();
             case "6" -> runNoteMenu();
             case "7" -> askAi();
-            case "8" -> showDrafts();
+            case "8" -> runDraftMenu();
             case "h", "help" -> printHelp();
             case "q", "quit", "exit" -> stop();
             default -> {
@@ -1789,22 +1791,189 @@ public final class ConsoleApplication {
         output.println(result.getPayload());
     }
 
-    private void showDrafts() {
+    private void runDraftMenu() {
+        printDraftMenu();
+        boolean inDraftMenu = true;
+        while (running && inDraftMenu) {
+            String command = readLine("请输入 AI 草稿命令: ");
+            if (command == null) {
+                running = false;
+                return;
+            }
+            inDraftMenu = dispatchDraftCommand(command);
+            output.flush();
+        }
+    }
+
+    private void printDraftMenu() {
+        output.println();
+        output.println("AI 草稿菜单");
+        output.println("l/list. 列表");
+        output.println("v/view. 查看");
+        output.println("c/confirm. 确认导入");
+        output.println("x/cancel. 取消");
+        output.println("b/back. 返回主菜单");
+        output.println("h/help. 帮助");
+    }
+
+    private boolean dispatchDraftCommand(String rawCommand) {
+        String command = rawCommand.strip().toLowerCase(Locale.ROOT);
+        if (command.isEmpty()) {
+            output.println("请输入 AI 草稿命令。");
+            return true;
+        }
+        switch (command) {
+            case "l", "list" -> listDrafts();
+            case "v", "view" -> viewDraft();
+            case "c", "confirm" -> confirmDraft();
+            case "x", "cancel" -> cancelDraft();
+            case "b", "back" -> {
+                return false;
+            }
+            case "h", "help" -> printDraftMenu();
+            default -> {
+                output.println("未知 AI 草稿命令，请输入 h 查看帮助。");
+                printDraftMenu();
+            }
+        }
+        return running;
+    }
+
+    private void listDrafts() {
         OperationResult<List<SuggestionDraftView>> result = services.draftLifecycleService().listDrafts();
         if (!printResult(result)) {
             return;
         }
-        List<SuggestionDraftView> drafts = result.getPayload();
+        printDraftList(result.getPayload());
+    }
+
+    private void viewDraft() {
+        ParsedInput<EntityId> id = readDraftId("AI 草稿 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printDraftResult(services.draftLifecycleService().getDraft(id.value()));
+    }
+
+    private void confirmDraft() {
+        ParsedInput<EntityId> id = readDraftId("AI 草稿 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printDraftResult(services.draftLifecycleService().confirmDraft(id.value()));
+    }
+
+    private void cancelDraft() {
+        ParsedInput<EntityId> id = readDraftId("AI 草稿 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printDraftResult(services.draftLifecycleService().cancelDraft(id.value()));
+    }
+
+    private void printDraftResult(OperationResult<SuggestionDraftView> result) {
+        if (!printResult(result)) {
+            return;
+        }
+        printDraftDetail(result.getPayload());
+    }
+
+    private void printDraftList(List<SuggestionDraftView> drafts) {
         output.println("AI 草稿列表");
         if (drafts.isEmpty()) {
             output.println("暂无 AI 草稿");
             return;
         }
-        drafts.stream().limit(10).forEach(draft -> output.println(draft.id().value()
+        drafts.forEach(draft -> output.println(draft.id().value()
                 + " | " + draft.type()
                 + " | " + draft.status()
                 + " | 任务 " + draft.tasks().size()
                 + " | 学习计划 " + draft.studyPlan().isPresent()));
+    }
+
+    private void printDraftDetail(SuggestionDraftView draft) {
+        output.println("AI 草稿详情");
+        output.println("ID: " + draft.id().value());
+        output.println("类型: " + draft.type());
+        output.println("状态: " + draft.status());
+        printTaskDraftItems(draft.tasks());
+        printStudyPlanDraft(draft);
+    }
+
+    private void printTaskDraftItems(List<TaskDraftItem> tasks) {
+        if (tasks.isEmpty()) {
+            output.println("任务草稿: 无");
+            return;
+        }
+        output.println("任务草稿:");
+        for (int index = 0; index < tasks.size(); index++) {
+            printTaskDraftItem(index + 1, tasks.get(index));
+        }
+    }
+
+    private void printTaskDraftItem(int index, TaskDraftItem item) {
+        output.println("任务 " + index);
+        output.println("标题: " + item.title());
+        output.println("优先级: " + item.priority());
+        output.println("截止日期: " + formatDraftDueDate(item));
+        output.println("描述: " + item.description());
+    }
+
+    private void printStudyPlanDraft(SuggestionDraftView draft) {
+        if (draft.studyPlan().isEmpty()) {
+            output.println("学习计划草稿: 无");
+            return;
+        }
+        output.println("学习计划草稿:");
+        printStudyPlanDraftContent(draft.studyPlan().get());
+    }
+
+    private void printStudyPlanDraftContent(StudyPlanDraftContent content) {
+        output.println("目标名称: " + content.goalName());
+        output.println("开始日期: " + content.startDate());
+        output.println("截止日期: " + content.endDate());
+        output.println("预期小时: " + content.expectedHours());
+        output.println("初始进度: " + content.initialProgress().toPercentageString());
+        printStudyPlanDraftBreakdown(content.breakdown());
+    }
+
+    private void printStudyPlanDraftBreakdown(List<String> breakdown) {
+        if (breakdown.isEmpty()) {
+            output.println("拆解: 无");
+            return;
+        }
+        output.println("拆解:");
+        for (int index = 0; index < breakdown.size(); index++) {
+            output.println((index + 1) + ". " + breakdown.get(index));
+        }
+    }
+
+    private ParsedInput<EntityId> readDraftId(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        EntityId id = parseDraftId(value);
+        return id == null ? ParsedInput.invalid() : ParsedInput.value(id);
+    }
+
+    private EntityId parseDraftId(String rawValue) {
+        try {
+            long value = Long.parseLong(rawValue.strip());
+            if (value <= 0) {
+                printValidationError("AI 草稿 id 必须是正整数");
+                return null;
+            }
+            return new EntityId(value);
+        } catch (NumberFormatException exception) {
+            printValidationError("AI 草稿 id 必须是正整数");
+            return null;
+        }
+    }
+
+    private String formatDraftDueDate(TaskDraftItem item) {
+        return item.hasDueDate() ? item.dueDate().toString() : "未设置";
     }
 
     private void printHelp() {

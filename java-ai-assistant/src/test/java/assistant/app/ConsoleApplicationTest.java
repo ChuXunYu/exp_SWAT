@@ -12,10 +12,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import assistant.ai.DraftLifecycleService;
+import assistant.ai.StudyPlanDraftContent;
+import assistant.ai.SuggestionDraftStatus;
+import assistant.ai.SuggestionDraftType;
+import assistant.ai.SuggestionDraftView;
+import assistant.ai.TaskDraftItem;
 import assistant.common.EntityId;
 import assistant.common.ErrorCode;
 import assistant.common.MoneyValue;
 import assistant.common.OperationResult;
+import assistant.common.Progress;
 import assistant.common.Tag;
 import assistant.common.TransactionAmount;
 import assistant.finance.FinanceStatistics;
@@ -28,6 +35,7 @@ import assistant.note.NoteView;
 import assistant.schedule.ScheduleService;
 import assistant.study.StudyPlanService;
 import assistant.testability.FixedTimeProvider;
+import assistant.task.TaskPriority;
 import assistant.task.TaskService;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -36,6 +44,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -70,7 +79,7 @@ class ConsoleApplicationTest {
 
     @Test
     void listCommandsDisplayEachCoreEntry() {
-        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\nb\n5\nb\n6\nb\n8\nq\n");
+        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\nb\n5\nb\n6\nb\n8\nb\nq\n");
 
         assertAll(
                 () -> assertContains(output, "任务菜单"),
@@ -79,12 +88,12 @@ class ConsoleApplicationTest {
                 () -> assertContains(output, "学习计划菜单"),
                 () -> assertContains(output, "收支菜单"),
                 () -> assertContains(output, "笔记菜单"),
-                () -> assertContains(output, "AI 草稿列表"));
+                () -> assertContains(output, "AI 草稿菜单"));
     }
 
     @Test
     void listCommandsDisplayEmptyStateWithoutDemoData() {
-        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\nl\nb\n5\nl\nb\n6\nl\nb\n8\nq\n");
+        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\nl\nb\n5\nl\nb\n6\nl\nb\n8\nl\nb\nq\n");
 
         assertAll(
                 () -> assertContains(output, "暂无任务"),
@@ -1442,6 +1451,215 @@ class ConsoleApplicationTest {
     }
 
     @Test
+    void draftMenuListsAllDraftsWithoutTruncation() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        List<SuggestionDraftView> drafts = java.util.stream.LongStream.rangeClosed(1, 11)
+                .mapToObj(id -> taskDraftView(id, SuggestionDraftStatus.CONFIRMABLE, "草稿" + id))
+                .toList();
+        when(draftLifecycleService.listDrafts()).thenReturn(OperationResult.success(drafts));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nl\nb\nq\n");
+
+        String list = between(output, "AI 草稿列表", "主菜单");
+        assertAll(
+                () -> assertContains(list, "1 | TASK_DRAFT | CONFIRMABLE | 任务 1 | 学习计划 false"),
+                () -> assertContains(list, "11 | TASK_DRAFT | CONFIRMABLE | 任务 1 | 学习计划 false"));
+    }
+
+    @Test
+    void draftMenuDisplaysListFailureWithoutListContent() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.listDrafts())
+                .thenReturn(OperationResult.failure(ErrorCode.VALIDATION_ERROR, "draft list failed"));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "失败: VALIDATION_ERROR - draft list failed"),
+                () -> assertNotContains(output, "AI 草稿列表"),
+                () -> assertNotContains(output, "暂无 AI 草稿"),
+                () -> assertNotContains(output, "TASK_DRAFT"));
+    }
+
+    @Test
+    void draftMenuViewsTaskDraftDetail() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.getDraft(new EntityId(1)))
+                .thenReturn(OperationResult.success(taskDraftView(1, SuggestionDraftStatus.CONFIRMABLE, "任务草稿")));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "AI 草稿详情"),
+                () -> assertContains(output, "ID: 1"),
+                () -> assertContains(output, "类型: TASK_DRAFT"),
+                () -> assertContains(output, "状态: CONFIRMABLE"),
+                () -> assertContains(output, "标题: 任务草稿"),
+                () -> assertContains(output, "优先级: MEDIUM"),
+                () -> assertContains(output, "截止日期: 2026-01-20"),
+                () -> assertContains(output, "描述: description"),
+                () -> assertContains(output, "学习计划草稿: 无"));
+    }
+
+    @Test
+    void draftMenuViewsStudyPlanDraftDetail() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.getDraft(new EntityId(2)))
+                .thenReturn(OperationResult.success(studyPlanDraftView(2, SuggestionDraftStatus.CONFIRMABLE, "学习草稿")));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nv\n2\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "任务草稿: 无"),
+                () -> assertContains(output, "目标名称: 学习草稿"),
+                () -> assertContains(output, "开始日期: 2026-01-15"),
+                () -> assertContains(output, "截止日期: 2026-02-15"),
+                () -> assertContains(output, "预期小时: 20"),
+                () -> assertContains(output, "初始进度: 10%"),
+                () -> assertContains(output, "1. 阶段一"),
+                () -> assertContains(output, "2. 阶段二"));
+    }
+
+    @Test
+    void draftMenuDisplaysUnsetDueDateForTaskDraft() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.getDraft(new EntityId(1)))
+                .thenReturn(OperationResult.success(taskDraftViewWithoutDueDate(
+                        1, SuggestionDraftStatus.CONFIRMABLE, "无截止")));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nv\n1\nb\nq\n");
+
+        assertContains(output, "截止日期: 未设置");
+    }
+
+    @Test
+    void draftMenuConfirmsDraftAndDisplaysImportedStatus() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.confirmDraft(new EntityId(1)))
+                .thenReturn(OperationResult.success(taskDraftView(1, SuggestionDraftStatus.IMPORTED, "已导入")));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nc\n1\nb\nq\n");
+
+        assertAll(
+                () -> verify(draftLifecycleService).confirmDraft(new EntityId(1)),
+                () -> assertContains(output, "AI 草稿详情"),
+                () -> assertContains(output, "状态: IMPORTED"));
+    }
+
+    @Test
+    void draftMenuCancelsDraftAndDisplaysCancelledStatus() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.cancelDraft(new EntityId(1)))
+                .thenReturn(OperationResult.success(taskDraftView(1, SuggestionDraftStatus.CANCELLED, "已取消")));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nx\n1\nb\nq\n");
+
+        assertAll(
+                () -> verify(draftLifecycleService).cancelDraft(new EntityId(1)),
+                () -> assertContains(output, "AI 草稿详情"),
+                () -> assertContains(output, "状态: CANCELLED"));
+    }
+
+    @Test
+    void draftMenuDisplaysNotFoundAndStateConflictFailuresWithoutDetail() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.getDraft(new EntityId(1)))
+                .thenReturn(OperationResult.failure(ErrorCode.NOT_FOUND, "draft missing"));
+        when(draftLifecycleService.confirmDraft(new EntityId(2)))
+                .thenReturn(OperationResult.failure(ErrorCode.STATE_CONFLICT, "terminal draft"));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nv\n1\nc\n2\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "失败: NOT_FOUND - draft missing"),
+                () -> assertContains(output, "失败: STATE_CONFLICT - terminal draft"),
+                () -> assertNotContains(output, "AI 草稿详情"));
+    }
+
+    @Test
+    void draftMenuDisplaysImportFailureWithoutOldDetail() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.confirmDraft(new EntityId(1)))
+                .thenReturn(OperationResult.failure(ErrorCode.VALIDATION_ERROR, "import failed"));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nc\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "失败: VALIDATION_ERROR - import failed"),
+                () -> assertNotContains(output, "AI 草稿详情"),
+                () -> assertNotContains(output, "状态: CONFIRMABLE"));
+    }
+
+    @Test
+    void draftMenuRejectsInvalidIdBeforeCallingDraftLifecycleService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        String output = runWithInput(services, "8\nv\n\nc\nabc\nx\n1.5\nv\n0\nc\n9223372036854775808\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "失败: VALIDATION_ERROR - AI 草稿 id 必须是正整数"),
+                () -> verify(draftLifecycleService, never()).getDraft(any(EntityId.class)),
+                () -> verify(draftLifecycleService, never()).confirmDraft(any(EntityId.class)),
+                () -> verify(draftLifecycleService, never()).cancelDraft(any(EntityId.class)),
+                () -> verify(draftLifecycleService, never()).listDrafts());
+    }
+
+    @Test
+    void draftMenuHandlesUnknownBlankHelpBackAndEof() {
+        String output = runWithInput(servicesWithoutDemoData(), "8\n?\n  \nh\nb\n1\nq\n");
+        String eofOutput = runWithInput(servicesWithoutDemoData(), "8\n");
+
+        assertAll(
+                () -> assertContains(output, "未知 AI 草稿命令，请输入 h 查看帮助。"),
+                () -> assertContains(output, "请输入 AI 草稿命令。"),
+                () -> assertContains(output, "AI 草稿菜单"),
+                () -> assertContains(output, "今日任务数: 0"),
+                () -> assertContains(eofOutput, "AI 草稿菜单"));
+    }
+
+    @Test
+    void draftMenuAcceptsLongCommandAliases() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
+        when(draftLifecycleService.listDrafts()).thenReturn(OperationResult.success(List.of()));
+        when(draftLifecycleService.getDraft(new EntityId(1)))
+                .thenReturn(OperationResult.success(taskDraftView(1, SuggestionDraftStatus.CONFIRMABLE, "查看")));
+        when(draftLifecycleService.confirmDraft(new EntityId(1)))
+                .thenReturn(OperationResult.success(taskDraftView(1, SuggestionDraftStatus.IMPORTED, "确认")));
+        when(draftLifecycleService.cancelDraft(new EntityId(1)))
+                .thenReturn(OperationResult.success(taskDraftView(1, SuggestionDraftStatus.CANCELLED, "取消")));
+        ApplicationServices services = withDraftLifecycleService(baseServices, draftLifecycleService);
+
+        runWithInput(services, "8\nlist\nview\n1\nconfirm\n1\ncancel\n1\nback\nq\n");
+
+        assertAll(
+                () -> verify(draftLifecycleService).listDrafts(),
+                () -> verify(draftLifecycleService).getDraft(new EntityId(1)),
+                () -> verify(draftLifecycleService).confirmDraft(new EntityId(1)),
+                () -> verify(draftLifecycleService).cancelDraft(new EntityId(1)));
+    }
+
+    @Test
     void aiCommandShowsNotConfiguredAndContinues() {
         String output = runWithInput(servicesWithDemoData(), "7\n今天有什么安排？\n1\nq\n");
 
@@ -1524,6 +1742,48 @@ class ConsoleApplicationTest {
                 tagSet(tags));
     }
 
+    private static SuggestionDraftView taskDraftView(long id, SuggestionDraftStatus status, String title) {
+        return new SuggestionDraftView(
+                new EntityId(id),
+                SuggestionDraftType.TASK_DRAFT,
+                status,
+                List.of(taskDraftItem(title, LocalDate.of(2026, 1, 20))),
+                Optional.empty());
+    }
+
+    private static SuggestionDraftView taskDraftViewWithoutDueDate(
+            long id, SuggestionDraftStatus status, String title) {
+        return new SuggestionDraftView(
+                new EntityId(id),
+                SuggestionDraftType.TASK_DRAFT,
+                status,
+                List.of(taskDraftItem(title, null)),
+                Optional.empty());
+    }
+
+    private static SuggestionDraftView studyPlanDraftView(long id, SuggestionDraftStatus status, String goalName) {
+        return new SuggestionDraftView(
+                new EntityId(id),
+                SuggestionDraftType.STUDY_PLAN_DRAFT,
+                status,
+                List.of(),
+                Optional.of(studyPlanDraftContent(goalName)));
+    }
+
+    private static TaskDraftItem taskDraftItem(String title, LocalDate dueDate) {
+        return new TaskDraftItem(title, "description", TaskPriority.MEDIUM, dueDate);
+    }
+
+    private static StudyPlanDraftContent studyPlanDraftContent(String goalName) {
+        return new StudyPlanDraftContent(
+                goalName,
+                LocalDate.of(2026, 1, 15),
+                LocalDate.of(2026, 2, 15),
+                20,
+                Progress.of(10),
+                List.of("阶段一", "阶段二"));
+    }
+
     private static LinkedHashSet<Tag> tagSet(String... values) {
         LinkedHashSet<Tag> tags = new LinkedHashSet<>();
         for (String value : values) {
@@ -1542,6 +1802,20 @@ class ConsoleApplicationTest {
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
                 baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+    }
+
+    private static ApplicationServices withDraftLifecycleService(
+            ApplicationServices baseServices, DraftLifecycleService draftLifecycleService) {
+        return new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                baseServices.financeService(),
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                draftLifecycleService,
                 baseServices.timeProvider());
     }
 

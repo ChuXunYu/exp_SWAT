@@ -341,3 +341,14 @@
 任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的个人笔记菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内复用或抽取小型输入解析辅助方法，但不得修改 `NoteService`、`NoteQuery`、`NoteView`、`Tag` 的公开契约。
 选择理由：任务待办、日程提醒、学习计划和收支记录四个本地控制台入口已具备完整可输入、可演示、可产生明确结果的闭环；主菜单命令 `6` 的笔记入口仍停留在一次性列表展示，尚不能通过控制台新增、查看、修改、删除、关键字搜索、标签搜索或组合筛选。个人笔记是需求中的第 7 个核心本地功能，并且为汇总标签分布和 AI 本地上下文提供输入；下一步应补齐笔记完整交互入口，沿用已验证的子菜单、字段解析、错误展示、EOF 和返回主菜单模式。
 上下文：既有 `ConsoleApplication` 主菜单中命令 `6` 当前调用 `showNotes()`，只执行 `NoteService.listNotes()` 并展示前 10 条笔记；既有 `NoteService` 已提供 `createNote(String title, String content, Set<String> tagTexts)`、`getNote(EntityId id)`、`listNotes()`、`listNotes(NoteQuery query)`、`searchByKeyword(String keyword)`、`searchByTag(String tagText)`、`updateNote(EntityId id, String title, String content, Set<String> tagTexts)`、`deleteNote(EntityId id)`，服务边界已负责标题、内容、标签、关键字、未找到和验证错误映射。`NoteQuery` 支持关键字与 `Tag` 组合筛选，`Tag` 负责标签首尾空白清理、空标签拒绝和小写归一；控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问笔记仓储或可变实体。普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
+
+---
+
+## R28 PASSED 实现控制台个人笔记完整交互入口
+结果：扩展 `assistant.app.ConsoleApplication` 的笔记入口，将主菜单命令 `6` 接入可循环笔记子菜单，实现笔记新增、查看、列表、关键字搜索、标签搜索、组合筛选、修改、删除、输入校验、帮助、返回主菜单和 EOF 处理；同步补充控制台交互测试。
+测试：`mvn clean test` 通过；验证报告记录通过 932 个测试，失败 0 个。
+
+## R28 NEW 实现控制台 AI 草稿完整交互入口
+任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的 AI 草稿菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内复用或抽取小型输入解析、草稿展示辅助方法，但不得修改 `DraftLifecycleService`、`DraftImportService`、`SuggestionDraftView`、`SuggestionDraft`、`TaskDraftItem`、`StudyPlanDraftContent` 的公开契约。
+选择理由：任务待办、日程提醒、学习计划、收支记录和个人笔记五个本地控制台入口已具备完整可输入、可演示、可产生明确结果的闭环；AI 草稿领域、解析、生命周期和正式导入服务也已完成，但主菜单命令 `8` 当前仍只展示草稿列表，无法通过控制台查看详情、确认导入或取消草稿。需求和技术方案明确要求 AI 结构化建议采用“草稿-确认-导入”流程，用户确认或取消后才影响正式任务/学习计划数据，因此下一步应补齐 AI 草稿完整交互入口，并沿用已验证的子菜单、id 解析、错误展示、EOF 和返回主菜单模式。
+上下文：既有 `ConsoleApplication` 主菜单中命令 `8` 当前调用 `showDrafts()`，只执行 `DraftLifecycleService.listDrafts()` 并展示前 10 条草稿；既有 `DraftLifecycleService` 已提供 `getDraft(EntityId id)`、`listDrafts()`、`cancelDraft(EntityId id)`、`confirmDraft(EntityId id)`，服务边界已负责草稿不存在、终态冲突、导入失败和只读视图返回。`SuggestionDraftView` 可展示草稿类型、状态、任务草稿列表和学习计划草稿内容；`TaskDraftItem` 与 `StudyPlanDraftContent` 提供结构化草稿字段。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问草稿仓储、任务仓储、学习计划仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
