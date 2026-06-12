@@ -2,6 +2,7 @@ package assistant.app;
 
 import assistant.ai.AiScenario;
 import assistant.ai.SuggestionDraftView;
+import assistant.common.EntityId;
 import assistant.common.OperationResult;
 import assistant.finance.FinanceStatistics;
 import assistant.finance.TransactionView;
@@ -9,13 +10,19 @@ import assistant.note.NoteView;
 import assistant.schedule.ScheduleView;
 import assistant.study.StudyPlanView;
 import assistant.summary.DashboardSummary;
+import assistant.task.TaskPriority;
+import assistant.task.TaskQuery;
+import assistant.task.TaskStatus;
 import assistant.task.TaskView;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.io.Writer;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 public final class ConsoleApplication {
@@ -75,7 +82,7 @@ public final class ConsoleApplication {
         }
         switch (command) {
             case "1" -> showSummary();
-            case "2" -> showTasks();
+            case "2" -> runTaskMenu();
             case "3" -> showSchedules();
             case "4" -> showStudyPlans();
             case "5" -> showTransactions();
@@ -109,22 +116,321 @@ public final class ConsoleApplication {
         output.println("标签数: " + summary.noteTagDistribution().size());
     }
 
-    private void showTasks() {
+    private void runTaskMenu() {
+        printTaskMenu();
+        boolean inTaskMenu = true;
+        while (running && inTaskMenu) {
+            String command = readLine("请输入任务命令: ");
+            if (command == null) {
+                running = false;
+                return;
+            }
+            inTaskMenu = dispatchTaskCommand(command);
+            output.flush();
+        }
+    }
+
+    private void printTaskMenu() {
+        output.println();
+        output.println("任务菜单");
+        output.println("l/list. 列表");
+        output.println("a/add. 新增");
+        output.println("v/view. 查看");
+        output.println("f/filter. 筛选");
+        output.println("u/update. 修改");
+        output.println("c/complete. 标记完成");
+        output.println("r/reopen. 撤销完成");
+        output.println("d/delete. 删除");
+        output.println("b/back. 返回主菜单");
+        output.println("h/help. 帮助");
+    }
+
+    private boolean dispatchTaskCommand(String rawCommand) {
+        String command = rawCommand.strip().toLowerCase(Locale.ROOT);
+        if (command.isEmpty()) {
+            output.println("请输入任务命令。");
+            return true;
+        }
+        switch (command) {
+            case "l", "list" -> listTasks();
+            case "a", "add" -> addTask();
+            case "v", "view" -> viewTask();
+            case "f", "filter" -> filterTasks();
+            case "u", "update" -> updateTask();
+            case "c", "complete" -> completeTask();
+            case "r", "reopen" -> reopenTask();
+            case "d", "delete" -> deleteTask();
+            case "b", "back" -> {
+                return false;
+            }
+            case "h", "help" -> printTaskMenu();
+            default -> {
+                output.println("未知任务命令，请输入 h 查看帮助。");
+                printTaskMenu();
+            }
+        }
+        return running;
+    }
+
+    private void listTasks() {
         OperationResult<List<TaskView>> result = services.taskService().listTasks();
         if (!printResult(result)) {
             return;
         }
-        List<TaskView> tasks = result.getPayload();
-        output.println("任务列表");
+        printTaskList("任务列表", result.getPayload());
+    }
+
+    private void addTask() {
+        String title = readTaskRawField("标题: ");
+        if (title == null) {
+            return;
+        }
+        String description = readTaskRawField("描述: ");
+        if (description == null) {
+            return;
+        }
+        ParsedInput<TaskPriority> priority = readRequiredTaskPriority("优先级(LOW/MEDIUM/HIGH): ");
+        if (!priority.hasValue()) {
+            return;
+        }
+        ParsedInput<LocalDate> dueDate = readRequiredTaskDueDate("截止日期(yyyy-MM-dd): ");
+        if (!dueDate.hasValue()) {
+            return;
+        }
+        printTaskResult(services.taskService().createTask(title, description, priority.value(), dueDate.value()));
+    }
+
+    private void viewTask() {
+        ParsedInput<EntityId> id = readTaskId("任务 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printTaskResult(services.taskService().getTask(id.value()));
+    }
+
+    private void filterTasks() {
+        ParsedInput<TaskStatus> status = readOptionalTaskStatus("状态(TODO/COMPLETED，可空): ");
+        if (status.isInvalid() || status.isEof()) {
+            return;
+        }
+        ParsedInput<TaskPriority> priority = readOptionalTaskPriority("优先级(LOW/MEDIUM/HIGH，可空): ");
+        if (priority.isInvalid() || priority.isEof()) {
+            return;
+        }
+        ParsedInput<LocalDate> dueDate = readOptionalTaskDueDate("截止日期(yyyy-MM-dd，可空): ");
+        if (dueDate.isInvalid() || dueDate.isEof()) {
+            return;
+        }
+        TaskQuery query = TaskQuery.of(
+                status.hasValue() ? status.value() : null,
+                priority.hasValue() ? priority.value() : null,
+                dueDate.hasValue() ? dueDate.value() : null);
+        OperationResult<List<TaskView>> result = services.taskService().listTasks(query);
+        if (!printResult(result)) {
+            return;
+        }
+        printTaskList("任务筛选结果", result.getPayload());
+    }
+
+    private void updateTask() {
+        ParsedInput<EntityId> id = readTaskId("任务 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        String title = readTaskRawField("标题: ");
+        if (title == null) {
+            return;
+        }
+        String description = readTaskRawField("描述: ");
+        if (description == null) {
+            return;
+        }
+        ParsedInput<TaskPriority> priority = readRequiredTaskPriority("优先级(LOW/MEDIUM/HIGH): ");
+        if (!priority.hasValue()) {
+            return;
+        }
+        ParsedInput<LocalDate> dueDate = readRequiredTaskDueDate("截止日期(yyyy-MM-dd): ");
+        if (!dueDate.hasValue()) {
+            return;
+        }
+        printTaskResult(services.taskService().updateTask(
+                id.value(), title, description, priority.value(), dueDate.value()));
+    }
+
+    private void completeTask() {
+        ParsedInput<EntityId> id = readTaskId("任务 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printTaskResult(services.taskService().markTaskCompleted(id.value()));
+    }
+
+    private void reopenTask() {
+        ParsedInput<EntityId> id = readTaskId("任务 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printTaskResult(services.taskService().reopenTask(id.value()));
+    }
+
+    private void deleteTask() {
+        ParsedInput<EntityId> id = readTaskId("任务 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printResult(services.taskService().deleteTask(id.value()));
+    }
+
+    private void printTaskResult(OperationResult<TaskView> result) {
+        if (!printResult(result)) {
+            return;
+        }
+        printTaskDetail(result.getPayload());
+    }
+
+    private void printTaskList(String heading, List<TaskView> tasks) {
+        output.println(heading);
         if (tasks.isEmpty()) {
             output.println("暂无任务");
             return;
         }
-        tasks.stream().limit(10).forEach(task -> output.println(task.id().value()
+        tasks.forEach(task -> output.println(task.id().value()
                 + " | " + task.title()
                 + " | " + task.priority()
                 + " | " + task.status()
                 + " | 截止 " + task.dueDate()));
+    }
+
+    private void printTaskDetail(TaskView task) {
+        output.println("任务详情");
+        output.println("ID: " + task.id().value());
+        output.println("标题: " + task.title());
+        output.println("优先级: " + task.priority());
+        output.println("状态: " + task.status());
+        output.println("截止日期: " + task.dueDate());
+        output.println("描述: " + task.description());
+    }
+
+    private String readTaskRawField(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+        }
+        return value;
+    }
+
+    private ParsedInput<EntityId> readTaskId(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        EntityId id = parseTaskId(value);
+        return id == null ? ParsedInput.invalid() : ParsedInput.value(id);
+    }
+
+    private ParsedInput<TaskPriority> readRequiredTaskPriority(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        TaskPriority priority = parseTaskPriority(value);
+        return priority == null ? ParsedInput.invalid() : ParsedInput.value(priority);
+    }
+
+    private ParsedInput<LocalDate> readRequiredTaskDueDate(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        LocalDate dueDate = parseTaskDueDate(value);
+        return dueDate == null ? ParsedInput.invalid() : ParsedInput.value(dueDate);
+    }
+
+    private ParsedInput<TaskStatus> readOptionalTaskStatus(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        TaskStatus status = parseTaskStatus(value);
+        return status == null ? ParsedInput.invalid() : ParsedInput.value(status);
+    }
+
+    private ParsedInput<TaskPriority> readOptionalTaskPriority(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        TaskPriority priority = parseTaskPriority(value);
+        return priority == null ? ParsedInput.invalid() : ParsedInput.value(priority);
+    }
+
+    private ParsedInput<LocalDate> readOptionalTaskDueDate(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        LocalDate dueDate = parseTaskDueDate(value);
+        return dueDate == null ? ParsedInput.invalid() : ParsedInput.value(dueDate);
+    }
+
+    private EntityId parseTaskId(String rawValue) {
+        try {
+            long value = Long.parseLong(rawValue.strip());
+            if (value <= 0) {
+                printValidationError("任务 id 必须是正整数");
+                return null;
+            }
+            return new EntityId(value);
+        } catch (NumberFormatException exception) {
+            printValidationError("任务 id 必须是正整数");
+            return null;
+        }
+    }
+
+    private TaskPriority parseTaskPriority(String rawValue) {
+        try {
+            return TaskPriority.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("优先级必须是 LOW、MEDIUM 或 HIGH");
+            return null;
+        }
+    }
+
+    private TaskStatus parseTaskStatus(String rawValue) {
+        try {
+            return TaskStatus.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("状态必须是 TODO 或 COMPLETED");
+            return null;
+        }
+    }
+
+    private LocalDate parseTaskDueDate(String rawValue) {
+        try {
+            return LocalDate.parse(rawValue.strip());
+        } catch (DateTimeParseException exception) {
+            printValidationError("截止日期格式必须是 yyyy-MM-dd");
+            return null;
+        }
+    }
+
+    private void printValidationError(String message) {
+        output.println("失败: VALIDATION_ERROR - " + message);
     }
 
     private void showSchedules() {
@@ -273,6 +579,51 @@ public final class ConsoleApplication {
             output.println("输入读取失败，程序退出。");
             running = false;
             return null;
+        }
+    }
+
+    private record ParsedInput<T>(State state, T value) {
+        private ParsedInput {
+            Objects.requireNonNull(state, "state");
+        }
+
+        static <T> ParsedInput<T> value(T value) {
+            return new ParsedInput<>(State.VALUE, Objects.requireNonNull(value, "value"));
+        }
+
+        static <T> ParsedInput<T> empty() {
+            return new ParsedInput<>(State.EMPTY, null);
+        }
+
+        static <T> ParsedInput<T> invalid() {
+            return new ParsedInput<>(State.INVALID, null);
+        }
+
+        static <T> ParsedInput<T> eof() {
+            return new ParsedInput<>(State.EOF, null);
+        }
+
+        boolean hasValue() {
+            return state == State.VALUE;
+        }
+
+        boolean isEmpty() {
+            return state == State.EMPTY;
+        }
+
+        boolean isInvalid() {
+            return state == State.INVALID;
+        }
+
+        boolean isEof() {
+            return state == State.EOF;
+        }
+
+        private enum State {
+            VALUE,
+            EMPTY,
+            INVALID,
+            EOF
         }
     }
 }

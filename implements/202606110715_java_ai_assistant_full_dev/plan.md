@@ -286,3 +286,14 @@
 任务：新增 `assistant.app` 控制台入口与应用装配基础，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/app/Main.java`、`ConsoleApplication.java`、`ApplicationServices.java`、`ApplicationFactory.java`、`DemoDataFactory.java`，以及对应测试 `ApplicationFactoryTest.java`、`DemoDataFactoryTest.java`、`ConsoleApplicationTest.java`。
 选择理由：8 个核心功能的领域、服务、汇总、AI 问答、DeepSeek 客户端和 AI 草稿导入链路已经完成，但技术方案和需求仍要求一个可运行、可演示、带清晰菜单或操作入口的 Java 命令行程序。先补齐应用装配、可选演示数据和主菜单命令分发骨架，可把服务层能力连接成 `main` 可启动的程序，并为后续细化各功能交互命令提供稳定入口。
 上下文：当前工程没有 `assistant.app` 包；既有服务包括 `TaskService`、`ScheduleService`、`StudyPlanService`、`FinanceService`、`NoteService`、`SummaryService`、`AiAssistantService`、`DraftLifecycleService`、`DraftImportService`，内存仓储和 `IncrementalIdGenerator`、`SystemTimeProvider`、`AiConfigurationLoader`、`DeepSeekAiClient`、`JdkAiHttpTransport` 均已可用于生产装配。技术方案要求启动层从环境变量和 JVM 系统属性读取 DeepSeek 配置，API Key 缺失时 AI 功能返回 `AI_NOT_CONFIGURED` 且本地功能可继续使用；演示数据可由 `DemoDataFactory` 可选装配，不读取真实用户文件；控制台层只处理菜单、输入解析和结果展示，不直接操作仓储集合、不直接调用 HTTP、不承载业务判断。普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间；测试应通过可控输入输出流、固定配置 map、固定时间和 fake AI 客户端验证装配、演示数据、退出命令、无效菜单、摘要展示入口和 AI 未配置提示等边界。
+
+---
+
+## R23 PASSED 实现控制台应用装配、主入口与基础菜单骨架
+结果：新增 `assistant.app.ApplicationServices`、`ApplicationFactory`、`DemoDataFactory`、`ConsoleApplication`、`Main`，实现生产/测试可控装配、可选演示数据、主入口、基础菜单、汇总与各核心功能列表入口、AI 未配置提示和 EOF/退出处理。
+测试：`mvn clean test` 通过；验证报告记录通过 844 个测试，失败 0 个。
+
+## R23 NEW 实现控制台任务待办完整交互入口
+任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的任务待办菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内新增小型包可见输入解析辅助类型或方法，但不得修改 `TaskService` 公开契约。
+选择理由：v22 让应用可以启动并展示 8 个核心功能入口，但任务、日程、学习计划、收支、笔记等本地功能在控制台层仍以列表/占位展示为主，尚未满足需求中“每个核心功能可演示、可输入、可产生明确结果”的交互验收口径。任务待办是最基础且状态链路最明确的本地模块，先把任务入口做成完整 CRUD + 状态迁移 + 筛选闭环，可为后续日程、学习计划、收支和笔记控制台交互复用同一输入解析、错误展示和菜单返回模式。
+上下文：既有 `ConsoleApplication` 主菜单中命令 `2` 当前只调用 `TaskService.listTasks()` 并展示前 10 条任务；既有 `TaskService` 已提供 `createTask(String title, String description, TaskPriority priority, LocalDate dueDate)`、`getTask(EntityId id)`、`listTasks()`、`listTasks(TaskQuery query)`、`updateTask(EntityId id, String title, String description, TaskPriority priority, LocalDate dueDate)`、`deleteTask(EntityId id)`、`markTaskCompleted(EntityId id)`、`reopenTask(EntityId id)`，服务边界已负责业务校验和错误码映射。`TaskPriority` 和 `TaskStatus` 为 enum，`TaskQuery` 支持状态、优先级和截止日期组合筛选，`EntityId` 要求正整数。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问任务仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。

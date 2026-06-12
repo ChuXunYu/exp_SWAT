@@ -48,10 +48,11 @@ class ConsoleApplicationTest {
 
     @Test
     void listCommandsDisplayEachCoreEntry() {
-        String output = runWithInput(servicesWithDemoData(), "2\n3\n4\n5\n6\n8\nq\n");
+        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\n4\n5\n6\n8\nq\n");
 
         assertAll(
-                () -> assertContains(output, "任务列表"),
+                () -> assertContains(output, "任务菜单"),
+                () -> assertContains(output, "l/list. 列表"),
                 () -> assertContains(output, "日程列表"),
                 () -> assertContains(output, "学习计划列表"),
                 () -> assertContains(output, "收支统计"),
@@ -61,7 +62,7 @@ class ConsoleApplicationTest {
 
     @Test
     void listCommandsDisplayEmptyStateWithoutDemoData() {
-        String output = runWithInput(servicesWithoutDemoData(), "2\n3\n4\n5\n6\n8\nq\n");
+        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\n4\n5\n6\n8\nq\n");
 
         assertAll(
                 () -> assertContains(output, "暂无任务"),
@@ -89,11 +90,163 @@ class ConsoleApplicationTest {
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
-        String output = runWithInput(services, "2\nq\n");
+        String output = runWithInput(services, "2\nl\nb\nq\n");
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
                 () -> assertContains(output, "task list failed"));
+    }
+
+    @Test
+    void taskMenuAddsTaskAndSummaryReflectsTodayTaskCount() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n今日任务\n描述\nHIGH\n2026-01-15\nl\nb\n1\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "标题: 今日任务"),
+                () -> assertContains(output, "1 | 今日任务 | HIGH | TODO | 截止 2026-01-15"),
+                () -> assertContains(output, "今日任务数: 1"));
+    }
+
+    @Test
+    void taskMenuViewsUpdatesDeletesTask() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n旧标题\n旧描述\nLOW\n2026-01-15\nv\n1\nu\n1\n新标题\n新描述\nMEDIUM\n2026-01-16\n"
+                        + "d\n1\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "标题: 旧标题"),
+                () -> assertContains(output, "标题: 新标题"),
+                () -> assertContains(output, "描述: 新描述"),
+                () -> assertContains(output, "操作成功"),
+                () -> assertContains(output, "NOT_FOUND"));
+    }
+
+    @Test
+    void taskMenuCompletesReportsConflictAndReopensTask() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n任务\n描述\nHIGH\n2026-01-15\nc\n1\nc\n1\nr\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "状态: COMPLETED"),
+                () -> assertContains(output, "STATE_CONFLICT"),
+                () -> assertContains(output, "状态: TODO"));
+    }
+
+    @Test
+    void taskMenuFiltersByStatusPriorityAndDueDate() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n匹配任务\n描述\nHIGH\n2026-01-15\n"
+                        + "a\n非匹配任务\n描述\nLOW\n2026-01-16\n"
+                        + "c\n1\nf\nCOMPLETED\nHIGH\n2026-01-15\nb\nq\n");
+
+        String filtered = between(output, "任务筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "匹配任务"),
+                () -> assertNotContains(filtered, "非匹配任务"));
+    }
+
+    @Test
+    void taskMenuFilterEmptyFieldsListAllTasks() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n第一项\n描述\nHIGH\n2026-01-15\n"
+                        + "a\n第二项\n描述\nLOW\n2026-01-16\n"
+                        + "f\n\n\n\nb\nq\n");
+
+        String filtered = between(output, "任务筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "第一项"),
+                () -> assertContains(filtered, "第二项"));
+    }
+
+    @Test
+    void taskMenuRejectsInvalidIdWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n保留任务\n描述\nMEDIUM\n2026-01-15\nv\nabc\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "任务 id 必须是正整数"),
+                () -> assertContains(output, "1 | 保留任务 | MEDIUM | TODO | 截止 2026-01-15"));
+    }
+
+    @Test
+    void taskMenuRejectsInvalidDateWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n坏日期任务\n描述\nHIGH\nbad-date\nl\nb\nq\n");
+
+        String list = between(output, "任务列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "截止日期格式必须是 yyyy-MM-dd"),
+                () -> assertNotContains(list, "坏日期任务"));
+    }
+
+    @Test
+    void taskMenuRejectsInvalidPriorityWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n坏优先级任务\n描述\nURGENT\nl\nb\nq\n");
+
+        String list = between(output, "任务列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "优先级必须是 LOW、MEDIUM 或 HIGH"),
+                () -> assertNotContains(list, "坏优先级任务"));
+    }
+
+    @Test
+    void taskMenuRejectsInvalidStatusWithoutServiceCall() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n保留任务\n描述\nMEDIUM\n2026-01-15\nf\nDONE\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "状态必须是 TODO 或 COMPLETED"),
+                () -> assertContains(output, "1 | 保留任务 | MEDIUM | TODO | 截止 2026-01-15"));
+    }
+
+    @Test
+    void taskMenuUnknownHelpBackAndMainMenuContinuation() {
+        String output = runWithInput(servicesWithoutDemoData(), "2\n?\nh\nb\n1\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "未知任务命令，请输入 h 查看帮助。"),
+                () -> assertContains(output, "任务菜单"),
+                () -> assertContains(output, "今日任务数: 0"));
+    }
+
+    @Test
+    void taskMenuBlankCommandPromptsAgainAndStaysInTaskMenu() {
+        String output = runWithInput(servicesWithoutDemoData(), "2\n  \nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "请输入任务命令。"),
+                () -> assertContains(output, "任务列表"));
+    }
+
+    @Test
+    void taskMenuExitsOnEofDuringCommandRead() {
+        String output = runWithInput(servicesWithoutDemoData(), "2\n");
+
+        assertContains(output, "任务菜单");
+    }
+
+    @Test
+    void taskMenuExitsOnEofDuringAddFields() {
+        String output = runWithInput(servicesWithoutDemoData(), "2\na\n半成品\n");
+
+        assertAll(
+                () -> assertContains(output, "任务菜单"),
+                () -> assertNotContains(output, "任务详情"));
     }
 
     @Test
@@ -189,6 +342,24 @@ class ConsoleApplicationTest {
         org.junit.jupiter.api.Assertions.assertTrue(
                 text.contains(expected),
                 () -> "expected output to contain <" + expected + "> but was:\n" + text);
+    }
+
+    private static String between(String text, String startInclusive, String endExclusive) {
+        int start = text.indexOf(startInclusive);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                start >= 0,
+                () -> "expected output to contain start <" + startInclusive + "> but was:\n" + text);
+        int end = text.indexOf(endExclusive, start);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                end >= 0,
+                () -> "expected output to contain end <" + endExclusive + "> after start but was:\n" + text);
+        return text.substring(start, end);
+    }
+
+    private static void assertNotContains(String text, String unexpected) {
+        org.junit.jupiter.api.Assertions.assertFalse(
+                text.contains(unexpected),
+                () -> "expected output not to contain <" + unexpected + "> but was:\n" + text);
     }
 
     private static void assertNullRejected(String expectedMessage, Executable executable) {
