@@ -352,3 +352,14 @@
 任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的 AI 草稿菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内复用或抽取小型输入解析、草稿展示辅助方法，但不得修改 `DraftLifecycleService`、`DraftImportService`、`SuggestionDraftView`、`SuggestionDraft`、`TaskDraftItem`、`StudyPlanDraftContent` 的公开契约。
 选择理由：任务待办、日程提醒、学习计划、收支记录和个人笔记五个本地控制台入口已具备完整可输入、可演示、可产生明确结果的闭环；AI 草稿领域、解析、生命周期和正式导入服务也已完成，但主菜单命令 `8` 当前仍只展示草稿列表，无法通过控制台查看详情、确认导入或取消草稿。需求和技术方案明确要求 AI 结构化建议采用“草稿-确认-导入”流程，用户确认或取消后才影响正式任务/学习计划数据，因此下一步应补齐 AI 草稿完整交互入口，并沿用已验证的子菜单、id 解析、错误展示、EOF 和返回主菜单模式。
 上下文：既有 `ConsoleApplication` 主菜单中命令 `8` 当前调用 `showDrafts()`，只执行 `DraftLifecycleService.listDrafts()` 并展示前 10 条草稿；既有 `DraftLifecycleService` 已提供 `getDraft(EntityId id)`、`listDrafts()`、`cancelDraft(EntityId id)`、`confirmDraft(EntityId id)`，服务边界已负责草稿不存在、终态冲突、导入失败和只读视图返回。`SuggestionDraftView` 可展示草稿类型、状态、任务草稿列表和学习计划草稿内容；`TaskDraftItem` 与 `StudyPlanDraftContent` 提供结构化草稿字段。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问草稿仓储、任务仓储、学习计划仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
+
+---
+
+## R29 PASSED 实现控制台 AI 草稿完整交互入口
+结果：扩展 `assistant.app.ConsoleApplication` 的 AI 草稿入口，将主菜单命令 `8` 接入可循环 AI 草稿子菜单，实现草稿列表、查看详情、确认导入、取消、终态展示、服务失败展示、id 输入校验、帮助、返回主菜单和 EOF 处理；同步补充控制台交互测试。
+测试：`mvn clean test` 通过；验证报告记录通过 944 个测试，失败 0 个。
+
+## R29 NEW 补齐实验 1 测试文档与覆盖证据说明
+任务：新增并完善实验 1 测试交付文档，预期文件路径包括 `java-ai-assistant/docs/test-plan.md`、`java-ai-assistant/docs/test-cases.md`、`java-ai-assistant/docs/defect-regression.md`、`java-ai-assistant/docs/coverage/README.md`，并必要时更新 `java-ai-assistant/README.md` 与 `java-ai-assistant/docs/environment.md` 中的测试运行和覆盖率生成说明。
+选择理由：源码、单元测试、Maven 构建、AI 配置说明和 8 个核心功能控制台入口已经基本完成，但完整需求明确要求实验 1 交付测试计划、白盒测试用例、覆盖证据、缺陷修复与回归测试记录、结果分析和必要的组件/集成测试边界说明。当前工程只存在 `README.md` 与 `docs/environment.md`，尚缺少技术方案目录中列出的测试计划、测试用例、缺陷回归和覆盖证据文档。下一步应补齐这些课程验收材料，使已有 944 个 JUnit 单元测试和 JaCoCo 配置能被教师或答辩材料直接追溯。
+上下文：项目已包含 `pom.xml` 中的 JUnit Jupiter、Mockito、Surefire/Failsafe 与 JaCoCo 配置，普通单元测试已覆盖 `assistant.common`、`task`、`schedule`、`study`、`finance`、`note`、`summary`、`ai` 和 `app` 包，并在 v28 验证报告中记录 `mvn clean test` 通过 944 个测试。需求要求测试计划说明测试目标、范围、环境、工具、分层和策略；测试用例应覆盖 8 个核心功能的成功路径、异常输入、边界条件、状态迁移、统计计算、跨模块组合和 AI 外部依赖失败处理；覆盖证据至少应选择 2 到 3 个复杂核心方法给出控制流/独立路径/用例映射，并说明 JaCoCo 报告生成方式；缺陷回归文档应记录本轮开发中已通过审议修订暴露并修复的代表性缺陷或可测性问题，例如任务服务只读快照、学习计划状态统计口径、AI HTTP 错误映射、草稿导入回滚和控制台草稿列表不截断等。文档不得声称普通单元测试访问真实 DeepSeek、真实网络、真实 API Key、真实用户文件或真实当前时间；真实 DeepSeek 连通性只能作为可选 `integration` profile 边界说明。

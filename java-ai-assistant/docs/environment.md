@@ -6,6 +6,9 @@
 - Maven
 - JUnit Jupiter 5.14.4
 - Mockito 5.18.0
+- Maven Surefire Plugin 3.5.6
+- Maven Failsafe Plugin 3.5.6
+- JaCoCo Maven Plugin 0.8.13
 
 ## Build And Test
 
@@ -27,7 +30,13 @@ Run integration tests:
 mvn -Pintegration verify
 ```
 
-JaCoCo reports are generated under `target/site/jacoco/` during the `verify` phase.
+Generate a JaCoCo report after tests:
+
+```bash
+mvn jacoco:report
+```
+
+JaCoCo reports are generated under `target/site/jacoco/` during the `verify` phase or by running `mvn jacoco:report`.
 
 ## DeepSeek Environment Variables
 
@@ -42,4 +51,17 @@ Do not place real API keys in source code, tests, or documentation.
 
 ## Test Isolation
 
-Ordinary unit tests do not read real environment variables, access the network, or depend on a DeepSeek API key. Future tests that make real external calls belong in the `integration` profile and should use the `*IT.java` naming convention.
+Ordinary unit tests use fixed time, in-memory repositories, and mock or fake AI dependencies. They do not access the real DeepSeek service, network resources, a real API key, user files, or the real current time. Future tests that make real external calls belong in the `integration` profile and should use the `*IT.java` naming convention.
+
+## Test Deliverables
+
+- [Test plan](test-plan.md)
+- [White-box test cases](test-cases.md)
+- [Defect and regression record](defect-regression.md)
+- [Coverage evidence notes](coverage/README.md)
+
+## Current Test Baseline
+
+The v28 validation report records `mvn clean test` passing 944 tests with 0 failures.
+
+The current `src/test/java` tree does not contain `*IT.java` integration test classes. Real DeepSeek connectivity is not part of the default unit-test baseline.
