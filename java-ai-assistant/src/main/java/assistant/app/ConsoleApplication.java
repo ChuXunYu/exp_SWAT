@@ -2,6 +2,7 @@ package assistant.app;
 
 import assistant.ai.AiScenario;
 import assistant.ai.SuggestionDraftView;
+import assistant.common.DateRange;
 import assistant.common.DateTimeRange;
 import assistant.common.EntityId;
 import assistant.common.OperationResult;
@@ -11,6 +12,8 @@ import assistant.note.NoteView;
 import assistant.schedule.ScheduleQuery;
 import assistant.schedule.ScheduleStatus;
 import assistant.schedule.ScheduleView;
+import assistant.study.StudyPlanQuery;
+import assistant.study.StudyPlanStatus;
 import assistant.study.StudyPlanView;
 import assistant.summary.DashboardSummary;
 import assistant.task.TaskPriority;
@@ -88,7 +91,7 @@ public final class ConsoleApplication {
             case "1" -> showSummary();
             case "2" -> runTaskMenu();
             case "3" -> runScheduleMenu();
-            case "4" -> showStudyPlans();
+            case "4" -> runStudyPlanMenu();
             case "5" -> showTransactions();
             case "6" -> showNotes();
             case "7" -> askAi();
@@ -725,23 +728,398 @@ public final class ConsoleApplication {
         }
     }
 
-    private void showStudyPlans() {
+    private void runStudyPlanMenu() {
+        printStudyPlanMenu();
+        boolean inStudyPlanMenu = true;
+        while (running && inStudyPlanMenu) {
+            String command = readLine("请输入学习计划命令: ");
+            if (command == null) {
+                running = false;
+                return;
+            }
+            inStudyPlanMenu = dispatchStudyPlanCommand(command);
+            output.flush();
+        }
+    }
+
+    private void printStudyPlanMenu() {
+        output.println();
+        output.println("学习计划菜单");
+        output.println("l/list. 列表");
+        output.println("a/add. 新增");
+        output.println("v/view. 查看");
+        output.println("f/filter. 筛选");
+        output.println("u/update. 修改");
+        output.println("p/progress. 更新进度");
+        output.println("d/delete. 删除");
+        output.println("b/back. 返回主菜单");
+        output.println("h/help. 帮助");
+    }
+
+    private boolean dispatchStudyPlanCommand(String rawCommand) {
+        String command = rawCommand.strip().toLowerCase(Locale.ROOT);
+        if (command.isEmpty()) {
+            output.println("请输入学习计划命令。");
+            return true;
+        }
+        switch (command) {
+            case "l", "list" -> listStudyPlans();
+            case "a", "add" -> addStudyPlan();
+            case "v", "view" -> viewStudyPlan();
+            case "f", "filter" -> filterStudyPlans();
+            case "u", "update" -> updateStudyPlan();
+            case "p", "progress" -> updateStudyPlanProgress();
+            case "d", "delete" -> deleteStudyPlan();
+            case "b", "back" -> {
+                return false;
+            }
+            case "h", "help" -> printStudyPlanMenu();
+            default -> {
+                output.println("未知学习计划命令，请输入 h 查看帮助。");
+                printStudyPlanMenu();
+            }
+        }
+        return running;
+    }
+
+    private void listStudyPlans() {
         OperationResult<List<StudyPlanView>> result = services.studyPlanService().listStudyPlans();
         if (!printResult(result)) {
             return;
         }
-        List<StudyPlanView> plans = result.getPayload();
-        output.println("学习计划列表");
+        printStudyPlanList("学习计划列表", result.getPayload());
+    }
+
+    private void addStudyPlan() {
+        String goalName = readStudyPlanRawField("目标名称: ");
+        if (goalName == null) {
+            return;
+        }
+        ParsedInput<DateRange> period = readRequiredStudyPlanPeriod(
+                "开始日期(yyyy-MM-dd): ",
+                "截止日期(yyyy-MM-dd): ");
+        if (!period.hasValue()) {
+            return;
+        }
+        ParsedInput<Integer> expectedHours = readRequiredStudyPlanExpectedHours("预期投入小时数: ");
+        if (!expectedHours.hasValue()) {
+            return;
+        }
+        ParsedInput<Integer> initialProgress = readOptionalStudyPlanInitialProgress("初始进度(0-100，可空): ");
+        if (initialProgress.isInvalid() || initialProgress.isEof()) {
+            return;
+        }
+        OperationResult<StudyPlanView> result = initialProgress.hasValue()
+                ? services.studyPlanService().createStudyPlan(
+                        goalName,
+                        period.value().startDate(),
+                        period.value().endDate(),
+                        expectedHours.value(),
+                        initialProgress.value())
+                : services.studyPlanService().createStudyPlan(
+                        goalName,
+                        period.value().startDate(),
+                        period.value().endDate(),
+                        expectedHours.value());
+        printStudyPlanResult(result);
+    }
+
+    private void viewStudyPlan() {
+        ParsedInput<EntityId> id = readStudyPlanId("学习计划 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printStudyPlanResult(services.studyPlanService().getStudyPlan(id.value()));
+    }
+
+    private void filterStudyPlans() {
+        ParsedInput<StudyPlanStatus> status = readOptionalStudyPlanStatus(
+                "状态(NOT_STARTED/IN_PROGRESS/COMPLETED/OVERDUE_INCOMPLETE，可空): ");
+        if (status.isInvalid() || status.isEof()) {
+            return;
+        }
+        ParsedInput<DateRange> period = readOptionalStudyPlanPeriod(
+                "开始日期(yyyy-MM-dd，可空): ",
+                "截止日期(yyyy-MM-dd，可空): ");
+        if (period.isInvalid() || period.isEof()) {
+            return;
+        }
+        StudyPlanQuery query = StudyPlanQuery.of(
+                status.hasValue() ? status.value() : null,
+                period.hasValue() ? period.value() : null);
+        OperationResult<List<StudyPlanView>> result = services.studyPlanService().listStudyPlans(query);
+        if (!printResult(result)) {
+            return;
+        }
+        printStudyPlanList("学习计划筛选结果", result.getPayload());
+    }
+
+    private void updateStudyPlan() {
+        ParsedInput<EntityId> id = readStudyPlanId("学习计划 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        String goalName = readStudyPlanRawField("目标名称: ");
+        if (goalName == null) {
+            return;
+        }
+        ParsedInput<DateRange> period = readRequiredStudyPlanPeriod(
+                "开始日期(yyyy-MM-dd): ",
+                "截止日期(yyyy-MM-dd): ");
+        if (!period.hasValue()) {
+            return;
+        }
+        ParsedInput<Integer> expectedHours = readRequiredStudyPlanExpectedHours("预期投入小时数: ");
+        if (!expectedHours.hasValue()) {
+            return;
+        }
+        printStudyPlanResult(services.studyPlanService().updateStudyPlanDetails(
+                id.value(),
+                goalName,
+                period.value().startDate(),
+                period.value().endDate(),
+                expectedHours.value()));
+    }
+
+    private void updateStudyPlanProgress() {
+        ParsedInput<EntityId> id = readStudyPlanId("学习计划 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        ParsedInput<Integer> progress = readRequiredStudyPlanProgress("进度(0-100): ");
+        if (!progress.hasValue()) {
+            return;
+        }
+        printStudyPlanResult(services.studyPlanService().updateStudyPlanProgress(id.value(), progress.value()));
+    }
+
+    private void deleteStudyPlan() {
+        ParsedInput<EntityId> id = readStudyPlanId("学习计划 id: ");
+        if (!id.hasValue()) {
+            return;
+        }
+        printResult(services.studyPlanService().deleteStudyPlan(id.value()));
+    }
+
+    private void printStudyPlanResult(OperationResult<StudyPlanView> result) {
+        if (!printResult(result)) {
+            return;
+        }
+        printStudyPlanDetail(result.getPayload());
+    }
+
+    private void printStudyPlanList(String heading, List<StudyPlanView> plans) {
+        output.println(heading);
         if (plans.isEmpty()) {
             output.println("暂无学习计划");
             return;
         }
-        plans.stream().limit(10).forEach(plan -> output.println(plan.id().value()
+        plans.forEach(plan -> output.println(plan.id().value()
                 + " | " + plan.goalName()
                 + " | " + plan.status()
                 + " | 进度 " + plan.progress().value() + "%"
                 + " | " + plan.startDate()
-                + " ~ " + plan.endDate()));
+                + " ~ " + plan.endDate()
+                + " | 预期 " + plan.expectedHours() + " 小时"));
+    }
+
+    private void printStudyPlanDetail(StudyPlanView plan) {
+        output.println("学习计划详情");
+        output.println("ID: " + plan.id().value());
+        output.println("目标: " + plan.goalName());
+        output.println("状态: " + plan.status());
+        output.println("进度: " + plan.progress().value() + "%");
+        output.println("开始日期: " + plan.startDate());
+        output.println("截止日期: " + plan.endDate());
+        output.println("预期投入小时数: " + plan.expectedHours());
+    }
+
+    private String readStudyPlanRawField(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+        }
+        return value;
+    }
+
+    private ParsedInput<EntityId> readStudyPlanId(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        EntityId id = parseStudyPlanId(value);
+        return id == null ? ParsedInput.invalid() : ParsedInput.value(id);
+    }
+
+    private ParsedInput<LocalDate> readRequiredStudyPlanDate(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        LocalDate date = parseStudyPlanDate(value);
+        return date == null ? ParsedInput.invalid() : ParsedInput.value(date);
+    }
+
+    private ParsedInput<LocalDate> readOptionalStudyPlanDate(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        LocalDate date = parseStudyPlanDate(value);
+        return date == null ? ParsedInput.invalid() : ParsedInput.value(date);
+    }
+
+    private ParsedInput<Integer> readRequiredStudyPlanExpectedHours(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        Integer expectedHours = parsePositiveInt(value, "预期投入小时数必须是正整数");
+        return expectedHours == null ? ParsedInput.invalid() : ParsedInput.value(expectedHours);
+    }
+
+    private ParsedInput<Integer> readRequiredStudyPlanProgress(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        Integer progress = parseStudyPlanProgress(value);
+        return progress == null ? ParsedInput.invalid() : ParsedInput.value(progress);
+    }
+
+    private ParsedInput<Integer> readOptionalStudyPlanInitialProgress(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        Integer progress = parseStudyPlanProgress(value);
+        return progress == null ? ParsedInput.invalid() : ParsedInput.value(progress);
+    }
+
+    private ParsedInput<StudyPlanStatus> readOptionalStudyPlanStatus(String prompt) {
+        String value = readLine(prompt);
+        if (value == null) {
+            running = false;
+            return ParsedInput.eof();
+        }
+        if (value.isBlank()) {
+            return ParsedInput.empty();
+        }
+        StudyPlanStatus status = parseStudyPlanStatus(value);
+        return status == null ? ParsedInput.invalid() : ParsedInput.value(status);
+    }
+
+    private ParsedInput<DateRange> readOptionalStudyPlanPeriod(String startPrompt, String endPrompt) {
+        ParsedInput<LocalDate> start = readOptionalStudyPlanDate(startPrompt);
+        if (start.isInvalid() || start.isEof()) {
+            return start.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        ParsedInput<LocalDate> end = readOptionalStudyPlanDate(endPrompt);
+        if (end.isInvalid() || end.isEof()) {
+            return end.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        if (start.isEmpty() && end.isEmpty()) {
+            return ParsedInput.empty();
+        }
+        if (start.isEmpty() || end.isEmpty()) {
+            printValidationError("学习计划开始日期和截止日期必须同时填写或同时为空");
+            return ParsedInput.invalid();
+        }
+        try {
+            return ParsedInput.value(new DateRange(start.value(), end.value()));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("学习计划结束日期不能早于开始日期");
+            return ParsedInput.invalid();
+        }
+    }
+
+    private ParsedInput<DateRange> readRequiredStudyPlanPeriod(String startPrompt, String endPrompt) {
+        ParsedInput<LocalDate> start = readRequiredStudyPlanDate(startPrompt);
+        if (!start.hasValue()) {
+            return start.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        ParsedInput<LocalDate> end = readRequiredStudyPlanDate(endPrompt);
+        if (!end.hasValue()) {
+            return end.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
+        }
+        try {
+            return ParsedInput.value(new DateRange(start.value(), end.value()));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("学习计划结束日期不能早于开始日期");
+            return ParsedInput.invalid();
+        }
+    }
+
+    private EntityId parseStudyPlanId(String rawValue) {
+        try {
+            long value = Long.parseLong(rawValue.strip());
+            if (value <= 0) {
+                printValidationError("学习计划 id 必须是正整数");
+                return null;
+            }
+            return new EntityId(value);
+        } catch (NumberFormatException exception) {
+            printValidationError("学习计划 id 必须是正整数");
+            return null;
+        }
+    }
+
+    private LocalDate parseStudyPlanDate(String rawValue) {
+        try {
+            return LocalDate.parse(rawValue.strip());
+        } catch (DateTimeParseException exception) {
+            printValidationError("学习计划日期格式必须是 yyyy-MM-dd");
+            return null;
+        }
+    }
+
+    private Integer parsePositiveInt(String rawValue, String validationMessage) {
+        try {
+            int value = Integer.parseInt(rawValue.strip());
+            if (value <= 0) {
+                printValidationError(validationMessage);
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException exception) {
+            printValidationError(validationMessage);
+            return null;
+        }
+    }
+
+    private Integer parseStudyPlanProgress(String rawValue) {
+        try {
+            int value = Integer.parseInt(rawValue.strip());
+            if (value < 0 || value > 100) {
+                printValidationError("进度必须是 0 到 100 的整数");
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException exception) {
+            printValidationError("进度必须是 0 到 100 的整数");
+            return null;
+        }
+    }
+
+    private StudyPlanStatus parseStudyPlanStatus(String rawValue) {
+        try {
+            return StudyPlanStatus.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            printValidationError("状态必须是 NOT_STARTED、IN_PROGRESS、COMPLETED 或 OVERDUE_INCOMPLETE");
+            return null;
+        }
     }
 
     private void showTransactions() {

@@ -308,3 +308,14 @@
 任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的日程提醒菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内抽取或复用小型输入解析辅助方法，但不得修改 `ScheduleService`、`ScheduleQuery`、`ScheduleView` 的公开契约。
 选择理由：v23 已把任务待办做成完整可输入、可演示、可产生明确结果的控制台闭环；主菜单命令 `3` 的日程入口仍停留在一次性列表展示，尚不能通过控制台新增、查看、修改、删除、按日期/状态筛选或演示冲突拒绝。日程提醒是需求中的第 4 个核心功能，具备时间范围解析、动态状态和冲突判断等高价值白盒路径；在任务菜单模式稳定后，下一步应补齐日程完整交互入口，并沿用已验证的菜单、错误展示、EOF 和返回主菜单模式。
 上下文：既有 `ConsoleApplication` 主菜单中命令 `3` 当前调用 `showSchedules()`，只执行 `ScheduleService.listSchedules()` 并展示前 10 条日程；既有 `ScheduleService` 已提供 `createSchedule(String name, DateTimeRange timeRange, String location, String note)`、`getSchedule(EntityId id)`、`listSchedules()`、`listSchedules(ScheduleQuery query)`、`listSchedulesByDate(LocalDate date)`、`updateSchedule(EntityId id, String name, DateTimeRange timeRange, String location, String note)`、`deleteSchedule(EntityId id)`，服务边界已负责名称、时间区间、冲突、未找到和验证错误映射。`ScheduleQuery` 支持日期和 `ScheduleStatus` 组合筛选，`ScheduleStatus` 包含 `UPCOMING`、`ONGOING`、`EXPIRED`，`DateTimeRange` 要求结束时间晚于开始时间且使用左闭右开语义。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问日程仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。
+
+---
+
+## R25 PASSED 实现控制台日程提醒完整交互入口
+结果：扩展 `assistant.app.ConsoleApplication` 的日程入口，将主菜单命令 `3` 接入可循环日程子菜单，实现日程新增、查看、列表、筛选、修改、删除、冲突错误展示、输入校验、帮助、返回主菜单和 EOF 处理；同步补充控制台交互测试。
+测试：`mvn test` 通过；验证报告记录通过 875 个测试，失败 0 个。
+
+## R25 NEW 实现控制台学习计划完整交互入口
+任务：扩展 `java-ai-assistant/src/main/java/assistant/app/ConsoleApplication.java` 的学习计划菜单交互，并补充 `java-ai-assistant/src/test/java/assistant/app/ConsoleApplicationTest.java` 覆盖；必要时可在 `assistant.app` 包内复用或抽取小型输入解析辅助方法，但不得修改 `StudyPlanService`、`StudyPlanQuery`、`StudyPlanView`、`StudyPlanStatus` 的公开契约。
+选择理由：任务待办和日程提醒两个控制台入口已具备完整可输入、可演示、可产生明确结果的闭环；主菜单命令 `4` 的学习计划入口仍停留在一次性列表展示，尚不能通过控制台新增、查看、修改详情、更新进度、删除、按状态/周期筛选或演示进度/日期边界错误。学习计划管理是需求中的第 5 个核心功能，并且与汇总统计和 AI 草稿导入强相关；下一步应补齐学习计划完整交互入口，沿用已验证的任务/日程子菜单、字段解析、错误展示、EOF 和返回主菜单模式。
+上下文：既有 `ConsoleApplication` 主菜单中命令 `4` 当前调用 `showStudyPlans()`，只执行 `StudyPlanService.listStudyPlans()` 并展示前 10 条学习计划；既有 `StudyPlanService` 已提供 `createStudyPlan(String goalName, LocalDate startDate, LocalDate endDate, int expectedHours)`、`createStudyPlan(String goalName, LocalDate startDate, LocalDate endDate, int expectedHours, int initialProgress)`、`getStudyPlan(EntityId id)`、`listStudyPlans()`、`listStudyPlans(StudyPlanQuery query)`、`updateStudyPlanDetails(EntityId id, String goalName, LocalDate startDate, LocalDate endDate, int expectedHours)`、`updateStudyPlanProgress(EntityId id, int progressValue)`、`deleteStudyPlan(EntityId id)`、`countCompletedPlans()`、`countIncompletePlans()`，服务边界已负责目标名称、日期区间、预期小时、进度范围、未找到和验证错误映射。`StudyPlanQuery` 支持 `StudyPlanStatus` 与 `DateRange` 周期组合筛选，状态枚举包含 `NOT_STARTED`、`IN_PROGRESS`、`COMPLETED`、`OVERDUE_INCOMPLETE`，日期区间要求开始日期不晚于结束日期。控制台层必须只做菜单、输入解析、调用服务和结果展示，不直接访问学习计划仓储或可变实体；普通单元测试不得读取真实环境变量、访问真实网络、依赖真实 API Key 或真实当前时间。

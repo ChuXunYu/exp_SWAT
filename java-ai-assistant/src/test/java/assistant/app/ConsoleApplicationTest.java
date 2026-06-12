@@ -10,6 +10,7 @@ import assistant.common.ErrorCode;
 import assistant.common.OperationResult;
 import assistant.finance.FinanceService;
 import assistant.schedule.ScheduleService;
+import assistant.study.StudyPlanService;
 import assistant.testability.FixedTimeProvider;
 import assistant.task.TaskService;
 import java.io.StringReader;
@@ -49,13 +50,13 @@ class ConsoleApplicationTest {
 
     @Test
     void listCommandsDisplayEachCoreEntry() {
-        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\n5\n6\n8\nq\n");
+        String output = runWithInput(servicesWithDemoData(), "2\nb\n3\nb\n4\nb\n5\n6\n8\nq\n");
 
         assertAll(
                 () -> assertContains(output, "任务菜单"),
                 () -> assertContains(output, "l/list. 列表"),
                 () -> assertContains(output, "日程菜单"),
-                () -> assertContains(output, "学习计划列表"),
+                () -> assertContains(output, "学习计划菜单"),
                 () -> assertContains(output, "收支统计"),
                 () -> assertContains(output, "笔记列表"),
                 () -> assertContains(output, "AI 草稿列表"));
@@ -63,7 +64,7 @@ class ConsoleApplicationTest {
 
     @Test
     void listCommandsDisplayEmptyStateWithoutDemoData() {
-        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\n5\n6\n8\nq\n");
+        String output = runWithInput(servicesWithoutDemoData(), "2\nl\nb\n3\nl\nb\n4\nl\nb\n5\n6\n8\nq\n");
 
         assertAll(
                 () -> assertContains(output, "暂无任务"),
@@ -507,6 +508,311 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "任务菜单"),
                 () -> assertNotContains(output, "任务详情"));
+    }
+
+    @Test
+    void studyPlanCommandDisplaysFailureCodeAndMessage() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        StudyPlanService studyPlanService = mock(StudyPlanService.class);
+        when(studyPlanService.listStudyPlans())
+                .thenReturn(OperationResult.failure(ErrorCode.VALIDATION_ERROR, "study plan list failed"));
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                studyPlanService,
+                baseServices.financeService(),
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "4\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "study plan list failed"));
+    }
+
+    @Test
+    void studyPlanMenuAddsPlanAndSummaryReflectsWeekStudyPlanCount() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n本周学习\n2026-01-13\n2026-01-18\n8\n25\nl\nv\n1\nb\n1\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "目标: 本周学习"),
+                () -> assertContains(output, "1 | 本周学习 | IN_PROGRESS | 进度 25% | 2026-01-13 ~ 2026-01-18 | 预期 8 小时"),
+                () -> assertContains(output, "学习计划详情"),
+                () -> assertContains(output, "本周学习计划数: 1"));
+    }
+
+    @Test
+    void studyPlanMenuViewsUpdatesProgressAndDeletesPlan() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n旧学习\n2026-01-13\n2026-01-18\n8\n10\n"
+                        + "v\n1\nu\n1\n新学习\n2026-01-14\n2026-01-20\n12\n"
+                        + "p\n1\n60\nd\n1\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "目标: 旧学习"),
+                () -> assertContains(output, "目标: 新学习"),
+                () -> assertContains(output, "截止日期: 2026-01-20"),
+                () -> assertContains(output, "预期投入小时数: 12"),
+                () -> assertContains(output, "进度: 60%"),
+                () -> assertContains(output, "操作成功"),
+                () -> assertContains(output, "NOT_FOUND"));
+    }
+
+    @Test
+    void studyPlanMenuFiltersByStatusAndPeriod() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n匹配学习\n2026-01-13\n2026-01-18\n8\n30\n"
+                        + "a\n非匹配学习\n2026-02-01\n2026-02-05\n5\n0\n"
+                        + "f\nin_progress\n2026-01-15\n2026-01-16\nb\nq\n");
+
+        String filtered = between(output, "学习计划筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "匹配学习"),
+                () -> assertNotContains(filtered, "非匹配学习"));
+    }
+
+    @Test
+    void studyPlanMenuFilterEmptyFieldsListAllPlans() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n第一学习\n2026-01-13\n2026-01-18\n8\n\n"
+                        + "a\n第二学习\n2026-02-01\n2026-02-05\n5\n\n"
+                        + "f\n\n\n\nb\nq\n");
+
+        String filtered = between(output, "学习计划筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "第一学习"),
+                () -> assertContains(filtered, "第二学习"),
+                () -> assertContains(filtered, "进度 0%"));
+    }
+
+    @Test
+    void studyPlanMenuCreatesDefaultInitialProgressWhenBlank() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n默认进度学习\n2026-01-13\n2026-01-18\n8\n\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "目标: 默认进度学习"),
+                () -> assertContains(output, "进度: 0%"));
+    }
+
+    @Test
+    void studyPlanMenuCreatesCompletedPlanWithExplicitProgress100() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n完成学习\n2026-01-13\n2026-01-18\n8\n100\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "进度: 100%"),
+                () -> assertContains(output, "状态: COMPLETED"));
+    }
+
+    @Test
+    void studyPlanMenuAcceptsLongCommandAliasesAndCaseInsensitiveStatus() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\nadd\n别名学习\n2026-01-13\n2026-01-18\n8\n100\n"
+                        + "view\n1\nupdate\n1\n别名学习已改\n2026-01-14\n2026-01-20\n10\n"
+                        + "progress\n1\n100\nfilter\ncompleted\n2026-01-14\n2026-01-20\nlist\ndelete\n1\nback\nquit\n");
+
+        String filtered = between(output, "学习计划筛选结果", "学习计划列表");
+        assertAll(
+                () -> assertContains(output, "目标: 别名学习"),
+                () -> assertContains(output, "目标: 别名学习已改"),
+                () -> assertContains(filtered, "别名学习已改"),
+                () -> assertContains(output, "操作成功"));
+    }
+
+    @Test
+    void studyPlanMenuRejectsInvalidIdWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n保留学习\n2026-01-13\n2026-01-18\n8\n\nv\nabc\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "学习计划 id 必须是正整数"),
+                () -> assertContains(output, "1 | 保留学习 | IN_PROGRESS | 进度 0% | 2026-01-13 ~ 2026-01-18 | 预期 8 小时"));
+    }
+
+    @Test
+    void studyPlanMenuRejectsInvalidDateWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n坏日期学习\nbad-date\n2026-01-18\nl\nb\nq\n");
+
+        String list = between(output, "学习计划列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "学习计划日期格式必须是 yyyy-MM-dd"),
+                () -> assertNotContains(list, "坏日期学习"));
+    }
+
+    @Test
+    void studyPlanMenuRejectsUpdateEndBeforeStartWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n保留学习\n2026-01-13\n2026-01-18\n8\n\n"
+                        + "u\n1\n不应修改学习\n2026-01-20\n2026-01-14\n"
+                        + "l\nb\nq\n");
+
+        String list = between(output, "学习计划列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "学习计划结束日期不能早于开始日期"),
+                () -> assertContains(list, "保留学习"),
+                () -> assertNotContains(list, "不应修改学习"));
+    }
+
+    @Test
+    void studyPlanMenuRejectsAddEndBeforeStartWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n倒置学习\n2026-01-20\n2026-01-14\n8\n\nl\nb\nq\n");
+
+        String list = between(output, "学习计划列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "学习计划结束日期不能早于开始日期"),
+                () -> assertNotContains(list, "倒置学习"));
+    }
+
+    @Test
+    void studyPlanMenuRejectsFilterSingleDateWithoutServiceCall() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        StudyPlanService studyPlanService = mock(StudyPlanService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                studyPlanService,
+                baseServices.financeService(),
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "4\nf\n\n2026-01-15\n\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "学习计划开始日期和截止日期必须同时填写或同时为空"));
+        org.mockito.Mockito.verifyNoInteractions(studyPlanService);
+    }
+
+    @Test
+    void studyPlanMenuRejectsFilterEndBeforeStartWithoutServiceCall() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        StudyPlanService studyPlanService = mock(StudyPlanService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                studyPlanService,
+                baseServices.financeService(),
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "4\nf\n\n2026-01-18\n2026-01-15\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "学习计划结束日期不能早于开始日期"));
+        org.mockito.Mockito.verifyNoInteractions(studyPlanService);
+    }
+
+    @Test
+    void studyPlanMenuRejectsInvalidHoursWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n坏小时学习\n2026-01-13\n2026-01-18\n0\nl\nb\nq\n");
+
+        String list = between(output, "学习计划列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "预期投入小时数必须是正整数"),
+                () -> assertNotContains(list, "坏小时学习"));
+    }
+
+    @Test
+    void studyPlanMenuRejectsInvalidProgressWithoutWriteOperation() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n保留进度\n2026-01-13\n2026-01-18\n8\n10\np\n1\n101\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "进度必须是 0 到 100 的整数"),
+                () -> assertContains(output, "进度: 10%"));
+    }
+
+    @Test
+    void studyPlanMenuRejectsInvalidStatusBeforeCallingStudyPlanService() {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        StudyPlanService studyPlanService = mock(StudyPlanService.class);
+        ApplicationServices services = new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                studyPlanService,
+                baseServices.financeService(),
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                baseServices.aiAssistantService(),
+                baseServices.draftLifecycleService(),
+                baseServices.timeProvider());
+
+        String output = runWithInput(services, "4\nf\nACTIVE\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "VALIDATION_ERROR"),
+                () -> assertContains(output, "状态必须是 NOT_STARTED、IN_PROGRESS、COMPLETED 或 OVERDUE_INCOMPLETE"));
+        org.mockito.Mockito.verifyNoInteractions(studyPlanService);
+    }
+
+    @Test
+    void studyPlanMenuUnknownHelpBackAndMainMenuContinuation() {
+        String output = runWithInput(servicesWithoutDemoData(), "4\n?\nh\nb\n1\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "未知学习计划命令，请输入 h 查看帮助。"),
+                () -> assertContains(output, "学习计划菜单"),
+                () -> assertContains(output, "本周学习计划数: 0"));
+    }
+
+    @Test
+    void studyPlanMenuBlankCommandPromptsAgainAndStaysInStudyPlanMenu() {
+        String output = runWithInput(servicesWithoutDemoData(), "4\n  \nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "请输入学习计划命令。"),
+                () -> assertContains(output, "学习计划列表"));
+    }
+
+    @Test
+    void studyPlanMenuExitsOnEofDuringCommandRead() {
+        String output = runWithInput(servicesWithoutDemoData(), "4\n");
+
+        assertContains(output, "学习计划菜单");
+    }
+
+    @Test
+    void studyPlanMenuExitsOnEofDuringAddFields() {
+        String output = runWithInput(servicesWithoutDemoData(), "4\na\n半成品学习计划\n");
+
+        assertAll(
+                () -> assertContains(output, "学习计划菜单"),
+                () -> assertNotContains(output, "学习计划详情"));
     }
 
     @Test
