@@ -178,3 +178,18 @@
 ## R14 RETRY 实现收支记录查询、只读视图、仓储、服务与统计闭环
 原因：计划审查指出 `updateTransaction(EntityId id, TransactionType type, String amountText, String category, LocalDate date, String note)` 的未知收支类型错误映射未收束；在 enum 接口形态下，未知或空类型最可能表现为 `type == null`，若不明确服务层契约，后续实现可能让实体层 `NullPointerException` 或 `IllegalArgumentException` 泄漏给调用方。
 修正：保持当前任务范围不变，在 `task_v14.md` 中明确 `type == null` 必须由 `FinanceService` 映射为 `OperationResult.failure(ErrorCode.VALIDATION_ERROR, ...)`，不得向调用方泄漏运行时异常；同时要求 `FinanceServiceTest` 覆盖该失败路径，并验证失败后仓储状态不变。
+
+---
+
+## R15 PASSED 实现收支记录查询、只读视图、仓储、服务与统计闭环
+结果：新增 `assistant.finance.TransactionQuery`、`TransactionView`、`TransactionRepository`、`InMemoryTransactionRepository`、`FinanceService`、`FinanceStatisticsService`，实现收支记录创建、查看、列表、组合筛选、修改、删除、即时统计、错误映射和仓储快照隔离。
+测试：`mvn test` 通过；验证报告记录通过 589 个测试，失败 0 个，推送成功。
+
+## R15 NEW 实现个人笔记领域模型与搜索策略基础
+任务：新增个人笔记模块的核心领域实体和关键字搜索策略，预期文件路径包括 `java-ai-assistant/src/main/java/assistant/note/Note.java`、`java-ai-assistant/src/main/java/assistant/note/NoteSearchPolicy.java`、`java-ai-assistant/src/test/java/assistant/note/NoteTest.java`、`java-ai-assistant/src/test/java/assistant/note/NoteSearchPolicyTest.java`。
+选择理由：任务、日程、学习计划和收支四个本地核心模块已形成服务闭环，可以进入 8 个核心功能中的个人笔记或日记管理。既有 `Tag`、`EntityId` 和可注入时间基础已完成，下一步应先固定笔记实体的标题、内容、创建日期、标签集合不变量，以及关键字匹配标题/内容/标签的统一策略，再在后续轮次补齐查询、仓储、只读视图和服务闭环，避免服务层直接散落文本清理、标签处理和关键字匹配规则。
+上下文：既有 `EntityId` 可作为笔记唯一编号，`Tag` 已负责标签首尾空白清理、空标签拒绝和 `Locale.ROOT` 小写归一，`TimeProvider.today()` 后续可用于服务创建日期。技术方案要求笔记实体持有标题、内容、创建日期和标签集合，标题和内容不能为空，标签通过 `Tag` 值对象统一处理；关键字查询由 `NoteSearchPolicy` 处理，关键字为空属于输入错误，后续服务应返回 `VALIDATION_ERROR`，无匹配返回空集合；关键字匹配标题和内容，标签查询按 `Tag` 的统一语义比较。普通单元测试不得依赖真实当前时间、网络、API Key 或外部文件。
+
+## R15 RETRY 实现个人笔记领域模型与搜索策略基础
+原因：计划审查指出两个契约缺口：其一，`NoteSearchPolicy` 的标题和内容关键字匹配只写为“建议采用大小写不敏感”，与测试覆盖大小写行为之间存在实现分叉；其二，替换全部标签时没有明确失败原子性，输入集合包含 `null` 或非法标签时可能污染原有标签集合。
+修正：保持当前任务范围不变，固定唯一可执行语义。要求标题和内容关键字匹配必须使用 `Locale.ROOT` 大小写不敏感包含匹配，标签匹配必须通过 `Tag.of(keyword)` 与标签集合按归一语义精确比较；同时要求替换全部标签必须先完整校验输入集合引用、元素非空和所有标签有效性，再替换内部状态，任何非法输入都必须保持原标签集合不变。测试需补充大小写不敏感断言和标签替换失败后状态不变性。
