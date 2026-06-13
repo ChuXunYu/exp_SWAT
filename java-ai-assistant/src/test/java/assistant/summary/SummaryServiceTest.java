@@ -114,8 +114,17 @@ class SummaryServiceTest {
                 () -> assertEquals(WEEK_START, summary.weekStart()),
                 () -> assertEquals(WEEK_END, summary.weekEnd()),
                 () -> assertEquals(MONTH_START, summary.monthStart()),
-                () -> assertEquals(MONTH_END, summary.monthEnd()));
-        verify(collaborators.taskService()).listTasks(TaskQuery.byDueDate(TODAY));
+                () -> assertEquals(MONTH_END, summary.monthEnd()),
+                () -> assertEquals(
+                        List.of("Review", "Done today"),
+                        summary.todayTasks().stream().map(TaskView::title).toList()),
+                () -> assertEquals(
+                        List.of("Old high", "Old low"),
+                        summary.overdueTasks().stream().map(TaskView::title).toList()),
+                () -> assertEquals(
+                        List.of("Review", "Soon high", "Window edge"),
+                        summary.upcomingHighPriorityTasks().stream().map(TaskView::title).toList()));
+        verify(collaborators.taskService()).listTasks(TaskQuery.all());
         verify(collaborators.scheduleService()).listSchedulesByDate(TODAY);
         verify(collaborators.studyPlanService()).listStudyPlans(StudyPlanQuery.byPeriod(new DateRange(WEEK_START, WEEK_END)));
         TransactionQuery monthQuery = TransactionQuery.byDateRange(new DateRange(MONTH_START, MONTH_END));
@@ -145,7 +154,7 @@ class SummaryServiceTest {
         Collaborators collaborators = collaboratorsWithSuccess();
         java.util.ArrayList<TaskView> tasks = new java.util.ArrayList<>(List.of(task(1, "Review")));
         java.util.ArrayList<NoteView> notes = new java.util.ArrayList<>(List.of(note(2, "First", Tag.of("java"))));
-        when(collaborators.taskService().listTasks(TaskQuery.byDueDate(TODAY))).thenReturn(OperationResult.success(tasks));
+        when(collaborators.taskService().listTasks(TaskQuery.all())).thenReturn(OperationResult.success(tasks));
         when(collaborators.noteService().listNotes()).thenReturn(OperationResult.success(notes));
 
         DashboardSummary summary = collaborators.newSummaryService().getDashboardSummary().getPayload();
@@ -154,6 +163,8 @@ class SummaryServiceTest {
 
         assertAll(
                 () -> assertEquals(1, summary.todayTasks().size()),
+                () -> assertEquals(0, summary.overdueTasks().size()),
+                () -> assertEquals(1, summary.upcomingHighPriorityTasks().size()),
                 () -> assertEquals(1, summary.noteCount()),
                 () -> assertEquals(List.of(Tag.of("java")), List.copyOf(summary.noteTagDistribution().keySet())));
     }
@@ -161,7 +172,7 @@ class SummaryServiceTest {
     @Test
     void getDashboardSummaryPropagatesFirstDependencyFailure() {
         assertFirstFailure(
-                c -> when(c.taskService().listTasks(TaskQuery.byDueDate(TODAY)))
+                c -> when(c.taskService().listTasks(TaskQuery.all()))
                         .thenReturn(OperationResult.failure(ErrorCode.VALIDATION_ERROR, "task failed")),
                 "task failed",
                 c -> {
@@ -219,7 +230,7 @@ class SummaryServiceTest {
         when(blankFailure.isFailure()).thenReturn(true);
         when(blankFailure.getErrorCode()).thenReturn(ErrorCode.VALIDATION_ERROR);
         when(blankFailure.getMessage()).thenReturn(" \t");
-        when(collaborators.taskService().listTasks(TaskQuery.byDueDate(TODAY))).thenReturn(blankFailure);
+        when(collaborators.taskService().listTasks(TaskQuery.all())).thenReturn(blankFailure);
 
         OperationResult<DashboardSummary> result = collaborators.newSummaryService().getDashboardSummary();
 
@@ -232,7 +243,7 @@ class SummaryServiceTest {
     @Test
     void buildLocalContextPropagatesSummaryFailure() {
         Collaborators collaborators = collaboratorsWithSuccess();
-        when(collaborators.taskService().listTasks(TaskQuery.byDueDate(TODAY)))
+        when(collaborators.taskService().listTasks(TaskQuery.all()))
                 .thenReturn(OperationResult.failure(ErrorCode.VALIDATION_ERROR, "task failed"));
 
         OperationResult<LocalContext> result = collaborators.newSummaryService().buildLocalContext();
@@ -252,17 +263,32 @@ class SummaryServiceTest {
         assertTrue(result.isSuccess());
         LocalContext context = result.getPayload();
         assertEquals(
-                "今日任务1项，今日日程1项，本周学习计划2项（已完成1项，未完成1项），本月收入0.00，支出0.00，结余0.00，笔记1篇，标签1个。",
+                "今日任务2项，逾期未完成任务2项，未来7天高优先级任务3项，今日日程1项，本周学习计划2项（已完成1项，未完成1项），本月收入0.00，支出0.00，结余0.00，笔记1篇，标签1个。",
                 context.overviewText());
         assertAll(
-                () -> assertEquals(1, context.dashboardSummary().todayTasks().size()),
+                () -> assertEquals(2, context.dashboardSummary().todayTasks().size()),
+                () -> assertEquals(2, context.dashboardSummary().overdueTasks().size()),
+                () -> assertEquals(3, context.dashboardSummary().upcomingHighPriorityTasks().size()),
                 () -> assertEquals(1, context.dashboardSummary().todaySchedules().size()),
                 () -> assertEquals(2, context.dashboardSummary().weekStudyPlans().size()),
                 () -> assertEquals(1, context.dashboardSummary().monthTransactions().size()),
                 () -> assertEquals(List.of(Tag.of("java")), List.copyOf(context.dashboardSummary().noteTagDistribution().keySet())),
                 () -> assertEquals(
-                        List.of("任务：Review｜优先级：HIGH｜状态：TODO｜截止：2026-02-18"),
+                        List.of(
+                                "任务：Review｜优先级：HIGH｜状态：TODO｜截止：2026-02-18",
+                                "任务：Done today｜优先级：HIGH｜状态：COMPLETED｜截止：2026-02-18"),
                         context.todayTaskLines()),
+                () -> assertEquals(
+                        List.of(
+                                "任务：Old high｜优先级：HIGH｜状态：TODO｜截止：2026-02-17",
+                                "任务：Old low｜优先级：LOW｜状态：TODO｜截止：2026-02-16"),
+                        context.overdueTaskLines()),
+                () -> assertEquals(
+                        List.of(
+                                "任务：Review｜优先级：HIGH｜状态：TODO｜截止：2026-02-18",
+                                "任务：Soon high｜优先级：HIGH｜状态：TODO｜截止：2026-02-19",
+                                "任务：Window edge｜优先级：HIGH｜状态：TODO｜截止：2026-02-25"),
+                        context.upcomingHighPriorityTaskLines()),
                 () -> assertEquals(
                         List.of("日程：Standup｜状态：UPCOMING｜时间：2026-02-18T09:00~2026-02-18T10:00｜地点：Room A"),
                         context.todayScheduleLines()),
@@ -327,7 +353,7 @@ class SummaryServiceTest {
                 () -> assertEquals(MONTH_START, summary.monthStart()),
                 () -> assertEquals(MONTH_END, summary.monthEnd()));
         verify(collaborators.timeProvider(), times(1)).today();
-        verify(collaborators.taskService()).listTasks(TaskQuery.byDueDate(TODAY));
+        verify(collaborators.taskService()).listTasks(TaskQuery.all());
         verify(collaborators.scheduleService()).listSchedulesByDate(TODAY);
         verify(collaborators.studyPlanService()).listStudyPlans(StudyPlanQuery.byPeriod(new DateRange(WEEK_START, WEEK_END)));
         TransactionQuery monthQuery = TransactionQuery.byDateRange(new DateRange(MONTH_START, MONTH_END));
@@ -364,8 +390,17 @@ class SummaryServiceTest {
                 collaborators.financeService(),
                 collaborators.noteService(),
                 timeProvider);
-        when(collaborators.taskService().listTasks(TaskQuery.byDueDate(TODAY)))
-                .thenReturn(OperationResult.success(List.of(task(1, "Review"))));
+        when(collaborators.taskService().listTasks(TaskQuery.all()))
+                .thenReturn(OperationResult.success(List.of(
+                        task(1, "Review", TaskPriority.HIGH, TODAY, TaskStatus.TODO),
+                        task(2, "Old high", TaskPriority.HIGH, TODAY.minusDays(1), TaskStatus.TODO),
+                        task(3, "Old done", TaskPriority.HIGH, TODAY.minusDays(1), TaskStatus.COMPLETED),
+                        task(4, "Old low", TaskPriority.LOW, TODAY.minusDays(2), TaskStatus.TODO),
+                        task(5, "Soon high", TaskPriority.HIGH, TODAY.plusDays(1), TaskStatus.TODO),
+                        task(6, "Soon medium", TaskPriority.MEDIUM, TODAY.plusDays(1), TaskStatus.TODO),
+                        task(7, "Future high", TaskPriority.HIGH, TODAY.plusDays(8), TaskStatus.TODO),
+                        task(8, "Done today", TaskPriority.HIGH, TODAY, TaskStatus.COMPLETED),
+                        task(9, "Window edge", TaskPriority.HIGH, TODAY.plusDays(7), TaskStatus.TODO))));
         when(collaborators.scheduleService().listSchedulesByDate(TODAY))
                 .thenReturn(OperationResult.success(List.of(schedule(2, "Standup"))));
         when(collaborators.studyPlanService().listStudyPlans(StudyPlanQuery.byPeriod(new DateRange(WEEK_START, WEEK_END))))
@@ -419,6 +454,10 @@ class SummaryServiceTest {
 
     private static TaskView task(long id, String title) {
         return new TaskView(new EntityId(id), title, "Description", TaskPriority.HIGH, TODAY, TaskStatus.TODO);
+    }
+
+    private static TaskView task(long id, String title, TaskPriority priority, LocalDate dueDate, TaskStatus status) {
+        return new TaskView(new EntityId(id), title, "Description", priority, dueDate, status);
     }
 
     private static ScheduleView schedule(long id, String name) {

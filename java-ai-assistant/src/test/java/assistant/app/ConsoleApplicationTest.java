@@ -83,10 +83,16 @@ class ConsoleApplicationTest {
 
     @Test
     void summaryCommandDisplaysDashboardSummary() {
-        String output = runWithInput(servicesWithDemoData(), "1\nq\n");
+        String output = runWithInput(
+                servicesWithDemoData(),
+                "2\na\n逾期任务\n补充覆盖\nHIGH\n2026-01-14\nb\n1\nq\n");
 
         assertAll(
                 () -> assertContains(output, "今日:"),
+                () -> assertContains(output, "逾期未完成任务数: 1"),
+                () -> assertContains(output, "未来7天高优先级任务数: 1"),
+                () -> assertContains(output, "逾期未完成任务:\n- 逾期任务 | 截止 2026-01-14 | HIGH | TODO"),
+                () -> assertContains(output, "未来7天高优先级任务:\n- 完成今日重点工作 | 截止 2026-01-15 | HIGH | TODO"),
                 () -> assertContains(output, "本月收入:"),
                 () -> assertContains(output, "本月结余:"));
     }

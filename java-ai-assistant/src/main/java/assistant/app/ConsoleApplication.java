@@ -124,6 +124,10 @@ public final class ConsoleApplication {
         FinanceStatistics statistics = summary.monthFinanceStatistics();
         output.println("今日: " + summary.today());
         output.println("今日任务数: " + summary.todayTasks().size());
+        output.println("逾期未完成任务数: " + summary.overdueTasks().size());
+        output.println("未来7天高优先级任务数: " + summary.upcomingHighPriorityTasks().size());
+        printTaskTitles("逾期未完成任务", summary.overdueTasks());
+        printTaskTitles("未来7天高优先级任务", summary.upcomingHighPriorityTasks());
         output.println("今日日程数: " + summary.todaySchedules().size());
         output.println("本周学习计划数: " + summary.weekStudyPlans().size());
         output.println("本月收入: " + statistics.totalIncome().toPlainString());
@@ -131,6 +135,19 @@ public final class ConsoleApplication {
         output.println("本月结余: " + statistics.balance().toPlainString());
         output.println("笔记数: " + summary.noteCount());
         output.println("标签数: " + summary.noteTagDistribution().size());
+    }
+
+    private void printTaskTitles(String heading, List<TaskView> tasks) {
+        if (tasks.isEmpty()) {
+            return;
+        }
+        output.println(heading + ":");
+        for (TaskView task : tasks) {
+            output.println("- " + task.title()
+                    + " | 截止 " + task.dueDate()
+                    + " | " + task.priority()
+                    + " | " + task.status());
+        }
     }
 
     private void runTaskMenu() {

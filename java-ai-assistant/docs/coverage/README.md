@@ -87,31 +87,35 @@ JaCoCo HTML 报告输出到 `target/site/jacoco/index.html`。本文件只记录
 
 1. 从 `TimeProvider` 获取今日日期。
 2. 计算本周开始、本周结束、本月开始和本月结束。
-3. 查询今日任务，失败则立即传播失败。
-4. 查询今日日程，失败则立即传播失败。
-5. 查询本周学习计划，失败则立即传播失败。
-6. 查询本月收支统计，失败则立即传播失败。
-7. 查询本月交易列表，失败则立即传播失败。
-8. 查询笔记列表，失败则立即传播失败。
-9. 统计本周已完成和未完成学习计划。
-10. 统计笔记标签分布。
-11. 组装并返回 `DashboardSummary`。
+3. 通过 `TaskQuery.all()` 查询一次全量任务快照，失败则立即传播失败。
+4. 从同一任务快照中过滤今日任务。
+5. 从同一任务快照中过滤逾期未完成任务。
+6. 从同一任务快照中过滤未来 7 天高优先级未完成任务。
+7. 查询今日日程，失败则立即传播失败。
+8. 查询本周学习计划，失败则立即传播失败。
+9. 查询本月收支统计，失败则立即传播失败。
+10. 查询本月交易列表，失败则立即传播失败。
+11. 查询笔记列表，失败则立即传播失败。
+12. 统计本周已完成和未完成学习计划。
+13. 统计笔记标签分布。
+14. 组装并返回 `DashboardSummary`。
 
-圈复杂度估算：按主要判定节点估算为 9，包含 6 个依赖失败早返回、学习计划状态过滤和笔记标签嵌套循环。
+圈复杂度估算：按主要判定节点估算为 14，包含 6 个依赖失败早返回、3 个任务过滤条件组合、学习计划状态过滤和笔记标签嵌套循环。
 
 独立路径：
 
 | 路径 | 条件 | 预期 | 映射用例 |
 |------|------|------|----------|
 | S-P1 | 全部仓储为空 | 返回空仪表盘和 0 统计 | SUMMARY-01；`SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries` |
-| S-P2 | 多模块均有数据 | 聚合今日任务/日程、本周计划、本月收支、笔记标签 | SUMMARY-02；`SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `ConsoleApplicationTest.summaryCommandDisplaysDashboardSummary` |
+| S-P2 | 多模块均有数据 | 聚合今日任务、紧急任务视图、日程、本周计划、本月收支、笔记标签 | SUMMARY-02；`SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `ConsoleApplicationTest.summaryCommandDisplaysDashboardSummary` |
 | S-P3 | 固定日期跨周/月边界 | 使用周一到周日、本月首日至末日查询 | SUMMARY-03；`SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `SummaryServiceTest.getDashboardSummaryUsesSingleStableTodaySnapshotForAllDateBoundariesAndQueries` |
 | S-P4 | 多个学习计划含完成和未完成状态 | 已完成/未完成计数正确 | SUMMARY-02；`SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries` |
 | S-P5 | 多条笔记含重复标签 | 标签分布合并计数 | SUMMARY-04；`SummaryServiceTest.getDashboardSummaryAggregatesNoteTagsInFirstSeenOrder` |
 | S-P6 | 任一依赖服务失败 | 立即返回失败并使用稳定消息 | SUMMARY-06；`SummaryServiceTest.getDashboardSummaryPropagatesFirstDependencyFailure`, `SummaryServiceTest.getDashboardSummaryUsesStableFallbackWhenDependencyFailureMessageIsBlank` |
-| S-P7 | 调用 `buildLocalContext` | 基于仪表盘生成 AI 本地上下文 | SUMMARY-05；`SummaryServiceTest.buildLocalContextReturnsLocalContextFromSuccessfulSummary`, `LocalContextTest.fromBuildsStableOverviewAndEmptyLinesForEmptySummary`, `LocalContextTest.fromBuildsLinesInSourceOrderForMultiModuleData` |
+| S-P7 | 任务快照含逾期、已完成、非高优先级、今天、第 7 天和第 8 天任务 | 逾期和未来 7 天高优先级视图按规则过滤并保持源顺序 | SUMMARY-07；`SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries` |
+| S-P8 | 调用 `buildLocalContext` | 基于仪表盘生成含紧急任务明细的 AI 本地上下文 | SUMMARY-05；`SummaryServiceTest.buildLocalContextReturnsLocalContextFromSuccessfulSummary`, `LocalContextTest.fromBuildsStableOverviewAndEmptyLinesForEmptySummary`, `LocalContextTest.fromBuildsLinesInSourceOrderForMultiModuleData` |
 
-覆盖结论：路径覆盖空数据、单模块/多模块组合、本周和本月范围、统计同步、标签聚合、依赖失败传播和 AI 本地上下文生成。
+覆盖结论：路径覆盖空数据、单模块/多模块组合、今日任务、逾期未完成任务、未来 7 天高优先级任务、本周和本月范围、统计同步、标签聚合、依赖失败传播和 AI 本地上下文生成。
 
 ## 覆盖证据与用例映射
 
@@ -119,8 +123,8 @@ JaCoCo HTML 报告输出到 `target/site/jacoco/index.html`。本文件只记录
 |------|----------|------------------------|----------|
 | `assistant.finance.FinanceStatisticsService.calculate(List<TransactionRecord>)` | F-P1 至 F-P5 | FINANCE-06；`FinanceStatisticsServiceTest.calculateReturnsZeroForEmptyRecords`, `FinanceStatisticsServiceTest.calculateAccumulatesIncomeAndExpenseSeparately`, `FinanceStatisticsServiceTest.calculateAllowsNegativeBalanceWhenExpenseExceedsIncome` | 覆盖空集合、收入、支出、混合和负结余 |
 | `assistant.ai.DraftImportService.importDraft(SuggestionDraft)` | D-P1 至 D-P10 | DRAFT-07 至 DRAFT-09, DRAFT-16；`DraftImportServiceTest` 任务和学习计划导入场景 | 覆盖类型分支、校验、回滚、breakdown 任务同步和失败传播 |
-| `assistant.summary.SummaryService.getDashboardSummary()` | S-P1 至 S-P6 | SUMMARY-01 至 SUMMARY-06；`SummaryServiceTest` 汇总场景 | 覆盖空数据、多模块、时间范围、标签统计和依赖失败 |
-| `assistant.summary.SummaryService.buildLocalContext()` | S-P7 | SUMMARY-05；`SummaryServiceTest.buildLocalContextReturnsLocalContextFromSuccessfulSummary`, `LocalContextTest.fromBuildsStableOverviewAndEmptyLinesForEmptySummary`, `LocalContextTest.fromBuildsLinesInSourceOrderForMultiModuleData` | 覆盖 AI 本地上下文链路 |
+| `assistant.summary.SummaryService.getDashboardSummary()` | S-P1 至 S-P7 | SUMMARY-01 至 SUMMARY-07；`SummaryServiceTest` 汇总场景 | 覆盖空数据、多模块、时间范围、紧急任务过滤、标签统计和依赖失败 |
+| `assistant.summary.SummaryService.buildLocalContext()` | S-P8 | SUMMARY-05；`SummaryServiceTest.buildLocalContextReturnsLocalContextFromSuccessfulSummary`, `LocalContextTest.fromBuildsStableOverviewAndEmptyLinesForEmptySummary`, `LocalContextTest.fromBuildsLinesInSourceOrderForMultiModuleData` | 覆盖 AI 本地上下文链路 |
 
 ## 结果记录方式
 

@@ -17,7 +17,7 @@
 | AI-01 | 单元测试 | 基本路径 | `AiAssistantService.ask` | `AiAssistantServiceTest.askSendsBuiltRequestToClientAndReturnsContent` | fake 本地上下文、fake prompt、fake AI 返回内容 | 返回成功响应内容 | 通过 |
 | AI-02 | 单元测试 | 判定覆盖 | `AiAssistantService.ask` | `AiAssistantServiceTest.askReturnsNotConfiguredWithoutCallingCollaborators` | AI 配置未启用 | 返回未配置失败且不调用协作者 | 通过 |
 | AI-03 | 单元测试 | 边界值 | `PromptBuilder.build` | `PromptBuilderTest.buildReturnsValidationFailureForBlankQuestion` | 空白用户问题 | 返回校验失败 | 通过 |
-| AI-04 | 单元测试 | 条件覆盖 | `PromptBuilder.build` | `PromptBuilderTest.buildIncludesOverviewAndAllContextSections` | 本地任务、日程、学习、收支、笔记上下文 | system prompt 包含本地上下文 | 通过 |
+| AI-04 | 单元测试 | 条件覆盖 | `PromptBuilder.build` | `PromptBuilderTest.buildIncludesOverviewAndAllContextSections`, `PromptBuilderTest.buildUsesStableEmptyMarkerForEmptyDetailLists` | 本地任务、逾期任务、未来高优先级任务、日程、学习、收支、笔记上下文 | user prompt 包含全部本地上下文段落，空列表输出稳定“无”标记 | 通过 |
 | AI-05 | 单元测试 | 等价类 | `AiConfigurationLoader.load` | `AiConfigurationLoaderTest.loadUsesDefaultsWhenMapIsEmpty`, `AiConfigurationLoaderTest.loadUsesProvidedValuesFromMap` | 空配置、base URL、model、timeout 覆盖 | 默认值或覆盖值正确 | 通过 |
 | AI-06 | 单元测试 | 错误推测 | `DeepSeekAiClient.chat` | `DeepSeekAiClientTest.chatMapsEmptyResponseShapes`, `DeepSeekAiClientTest.chatMapsMalformedResponseShapes` | 空 choices、缺失 message、非 JSON 响应 | 映射为空响应或格式错误 | 通过 |
 | AI-07 | 单元测试 | 条件覆盖 | `DeepSeekAiClient.chat`, `AiErrorMapper` | `DeepSeekAiClientTest.chatMapsHttpStatusFailuresWithoutParsingBody`, `AiErrorMapperTest.mapsExplicitHttpStatuses` | HTTP 401、429、5xx | 映射鉴权、限流、服务器错误 | 通过 |
@@ -110,11 +110,12 @@
 | 编号 | 测试层级 | 测试方法 | 被测类/方法 | JUnit 测试类/方法 | 输入或前置条件 | 预期结果 | 实际结果 |
 |------|----------|----------|-------------|-------------------|----------------|----------|----------|
 | SUMMARY-01 | 单元测试 | 基本路径 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries` | 空内存仓储、固定日期 | 返回空任务、空日程、空计划、0 收支、0 笔记 | 通过 |
-| SUMMARY-02 | 单元测试 | 场景链路 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `ConsoleApplicationTest.summaryCommandDisplaysDashboardSummary` | 同日任务/日程、本周计划、本月收支、带标签笔记 | 返回多模块组合摘要 | 通过 |
+| SUMMARY-02 | 单元测试 | 场景链路 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `ConsoleApplicationTest.summaryCommandDisplaysDashboardSummary` | 同日任务、逾期任务、未来 7 天高优先级任务、日程、本周计划、本月收支、带标签笔记 | 返回多模块组合摘要，控制台展示新增紧急任务计数和标题 | 通过 |
 | SUMMARY-03 | 单元测试 | 条件覆盖 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `SummaryServiceTest.getDashboardSummaryUsesSingleStableTodaySnapshotForAllDateBoundariesAndQueries` | 固定日期位于周/月中间 | 本周学习、本月收支边界正确 | 通过 |
 | SUMMARY-04 | 单元测试 | 条件覆盖 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryAggregatesNoteTagsInFirstSeenOrder` | 多条笔记共享标签 | 标签分布计数正确 | 通过 |
-| SUMMARY-05 | 单元测试 | 基本路径 | `SummaryService.buildLocalContext` | `SummaryServiceTest.buildLocalContextReturnsLocalContextFromSuccessfulSummary`, `LocalContextTest.fromBuildsStableOverviewAndEmptyLinesForEmptySummary`, `LocalContextTest.fromBuildsLinesInSourceOrderForMultiModuleData` | 已有仪表盘摘要 | 生成 AI 本地上下文 | 通过 |
+| SUMMARY-05 | 单元测试 | 基本路径 | `SummaryService.buildLocalContext` | `SummaryServiceTest.buildLocalContextReturnsLocalContextFromSuccessfulSummary`, `LocalContextTest.fromBuildsStableOverviewAndEmptyLinesForEmptySummary`, `LocalContextTest.fromBuildsOnlyCorrespondingLinesForSingleModuleData`, `LocalContextTest.fromBuildsLinesInSourceOrderForMultiModuleData` | 已有仪表盘摘要，含今日、逾期和未来高优先级任务 | 生成 AI 本地上下文总览和三类任务明细行 | 通过 |
 | SUMMARY-06 | 单元测试 | 错误推测 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryPropagatesFirstDependencyFailure`, `SummaryServiceTest.getDashboardSummaryUsesStableFallbackWhenDependencyFailureMessageIsBlank` | 依赖服务返回失败 | 摘要返回同一错误码和稳定消息 | 通过 |
+| SUMMARY-07 | 单元测试 | 条件覆盖 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `DashboardSummaryTest.constructorCopiesListsAndMapAsUnmodifiableSnapshots`, `DashboardSummaryTest.constructorRejectsNullRequiredFieldsAndElements` | 全量任务快照含今天、逾期、已完成、低/中/高优先级、未来 7 天边界和 8 天外任务 | 今日任务不过滤状态，逾期只含未完成，未来 7 天只含未完成高优先级且包含今天和第 7 天 | 通过 |
 
 ## 跨模块场景链路
 
@@ -124,11 +125,11 @@
 | AI 学习计划草稿确认导入到学习计划服务和任务服务 | DRAFT-09, DRAFT-16, STUDY-01, TASK-08, SUMMARY-02 | 导入成功后本周学习计划摘要可见，breakdown 步骤同步为任务服务可见的待办 | 通过 |
 | AI 草稿取消不写入本地业务数据 | DRAFT-05 | 取消后任务和学习计划数据不变化 | 通过 |
 | AI 草稿导入失败回滚 | DRAFT-08 | 任务批量导入中途失败时已创建任务被删除 | 通过 |
-| 任务变化后汇总同步 | TASK-08, SUMMARY-02 | 今日任务数量和完成状态在仪表盘中同步 | 通过 |
+| 任务变化后汇总同步 | TASK-08, SUMMARY-02, SUMMARY-07 | 今日任务数量、逾期未完成任务和未来 7 天高优先级任务在仪表盘、控制台和 AI 本地上下文中同步 | 通过 |
 | 日程变化后汇总同步 | SCHEDULE-05, SUMMARY-02 | 今日日程在仪表盘中同步 | 通过 |
 | 学习计划变化后汇总同步 | STUDY-05, SUMMARY-02 | 本周计划数量和完成/未完成计数同步 | 通过 |
 | 收支变化后汇总同步 | FINANCE-07, SUMMARY-02 | 本月收入、支出和结余同步 | 通过 |
-| 笔记变化后汇总和 AI 本地上下文同步 | NOTE-06, SUMMARY-04, SUMMARY-05 | 笔记数量、标签分布和本地上下文同步 | 通过 |
+| 笔记变化后汇总和 AI 本地上下文同步 | NOTE-06, SUMMARY-04, SUMMARY-05 | 笔记数量、标签分布和本地上下文同步；任务紧急视图明细同样进入 AI prompt | 通过 |
 
 ## 执行结果摘要
 

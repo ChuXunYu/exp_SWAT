@@ -247,6 +247,8 @@ class StructuredSuggestionDraftServiceTest {
                 List.of(),
                 List.of(),
                 List.of(),
+                List.of(),
+                List.of(),
                 0,
                 0,
                 assistant.finance.FinanceStatistics.zero(),

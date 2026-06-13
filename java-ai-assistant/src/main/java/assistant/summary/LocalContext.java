@@ -14,6 +14,8 @@ public record LocalContext(
         DashboardSummary dashboardSummary,
         String overviewText,
         List<String> todayTaskLines,
+        List<String> overdueTaskLines,
+        List<String> upcomingHighPriorityTaskLines,
         List<String> todayScheduleLines,
         List<String> weekStudyPlanLines,
         List<String> monthTransactionLines,
@@ -25,6 +27,8 @@ public record LocalContext(
             throw new IllegalArgumentException("overviewText must not be blank");
         }
         todayTaskLines = copyLines(todayTaskLines, "todayTaskLines");
+        overdueTaskLines = copyLines(overdueTaskLines, "overdueTaskLines");
+        upcomingHighPriorityTaskLines = copyLines(upcomingHighPriorityTaskLines, "upcomingHighPriorityTaskLines");
         todayScheduleLines = copyLines(todayScheduleLines, "todayScheduleLines");
         weekStudyPlanLines = copyLines(weekStudyPlanLines, "weekStudyPlanLines");
         monthTransactionLines = copyLines(monthTransactionLines, "monthTransactionLines");
@@ -37,6 +41,8 @@ public record LocalContext(
                 dashboardSummary,
                 buildOverviewText(dashboardSummary),
                 dashboardSummary.todayTasks().stream().map(LocalContext::taskLine).toList(),
+                dashboardSummary.overdueTasks().stream().map(LocalContext::taskLine).toList(),
+                dashboardSummary.upcomingHighPriorityTasks().stream().map(LocalContext::taskLine).toList(),
                 dashboardSummary.todaySchedules().stream().map(LocalContext::scheduleLine).toList(),
                 dashboardSummary.weekStudyPlans().stream().map(LocalContext::studyPlanLine).toList(),
                 dashboardSummary.monthTransactions().stream().map(LocalContext::transactionLine).toList(),
@@ -46,6 +52,8 @@ public record LocalContext(
     private static String buildOverviewText(DashboardSummary summary) {
         FinanceStatistics statistics = summary.monthFinanceStatistics();
         return "今日任务" + summary.todayTasks().size()
+                + "项，逾期未完成任务" + summary.overdueTasks().size()
+                + "项，未来7天高优先级任务" + summary.upcomingHighPriorityTasks().size()
                 + "项，今日日程" + summary.todaySchedules().size()
                 + "项，本周学习计划" + summary.weekStudyPlans().size()
                 + "项（已完成" + summary.completedWeekStudyPlanCount()
