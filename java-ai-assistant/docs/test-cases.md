@@ -42,7 +42,7 @@
 | DRAFT-12 | 服务层场景测试 | 基本路径 | `StructuredSuggestionDraftService.generateStudyPlanDraft` | `StructuredSuggestionDraftServiceTest.generateStudyPlanDraftParsesAssignsIdSavesBreakdown` | AI 返回合法学习计划草稿 JSON 且包含 breakdown | 保存学习计划草稿并保留拆解步骤 | 通过 |
 | DRAFT-13 | 服务层场景测试 | 错误推测 | `StructuredSuggestionDraftService.generateTaskDraft` | `StructuredSuggestionDraftServiceTest.generateTaskDraftRejectsMissingDueDateWithoutSaving`, `StructuredSuggestionDraftServiceTest.generateTaskDraftRejectsMismatchedStudyPlanTypeWithoutSaving` | 任务草稿缺失 dueDate 或返回类型不匹配 | 返回校验失败且不保存草稿 | 通过 |
 | DRAFT-14 | 服务层场景测试 | 错误推测 | `StructuredSuggestionDraftService.generateTaskDraft` | `StructuredSuggestionDraftServiceTest.generateDraftPropagatesNotConfiguredWithoutSaving`, `StructuredSuggestionDraftServiceTest.generateDraftRejectsMalformedJsonWithoutSaving`, `StructuredSuggestionDraftServiceTest.generateDraftRejectsInvalidStructuredFieldsWithoutSaving` | AI 未配置、非 JSON、非法结构化字段 | 传播对应失败且不保存草稿 | 通过 |
-| DRAFT-15 | 控制台交互单元测试 | 场景链路 | `ConsoleApplication` 草稿菜单 | `ConsoleApplicationTest.draftMenuGeneratesTaskDraftAndListsAndViewsIt`, `ConsoleApplicationTest.draftMenuGeneratesStudyPlanDraftAndDisplaysBreakdown`, `ConsoleApplicationTest.generatedTaskDraftCanConfirmCancelAndRejectRepeatConfirm` | 控制台生成任务或学习计划草稿后列表、查看、确认、取消 | 生成草稿详情可见，确认导入写入正式任务，取消不导入，重复确认冲突 | 通过 |
+| DRAFT-15 | 控制台交互单元测试 | 场景链路 | `ConsoleApplication` 草稿菜单 | `ConsoleApplicationTest.draftMenuGeneratesTaskDraftAndListsAndViewsIt`, `ConsoleApplicationTest.draftMenuGeneratesStudyPlanDraftAndDisplaysBreakdown`, `ConsoleApplicationTest.generatedTaskDraftCanConfirmCancelAndRejectRepeatConfirm`, `ConsoleApplicationTest.draftMenuDisplaysChineseDraftTypeStatusAndTaskPriority` | 控制台生成任务或学习计划草稿后列表、查看、确认、取消 | 生成草稿详情可见，确认导入写入正式任务，取消不导入，重复确认冲突，草稿类型/状态和任务草稿优先级中文展示 | 通过 |
 
 ### 任务待办管理。
 
@@ -117,11 +117,24 @@
 | SUMMARY-06 | 单元测试 | 错误推测 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryPropagatesFirstDependencyFailure`, `SummaryServiceTest.getDashboardSummaryUsesStableFallbackWhenDependencyFailureMessageIsBlank` | 依赖服务返回失败 | 摘要返回同一错误码和稳定消息 | 通过 |
 | SUMMARY-07 | 单元测试 | 条件覆盖 | `SummaryService.getDashboardSummary` | `SummaryServiceTest.getDashboardSummaryQueriesServicesWithExpectedDateBoundaries`, `DashboardSummaryTest.constructorCopiesListsAndMapAsUnmodifiableSnapshots`, `DashboardSummaryTest.constructorRejectsNullRequiredFieldsAndElements` | 全量任务快照含今天、逾期、已完成、低/中/高优先级、未来 7 天边界和 8 天外任务 | 今日任务不过滤状态，逾期只含未完成，未来 7 天只含未完成高优先级且包含今天和第 7 天 | 通过 |
 
+### 控制台中文枚举交互。
+
+| 编号 | 测试层级 | 测试方法 | 被测类/方法 | JUnit 测试类/方法 | 输入或前置条件 | 预期结果 | 实际结果 |
+|------|----------|----------|-------------|-------------------|----------------|----------|----------|
+| CONSOLE-01 | 控制台交互单元测试 | 等价类 | `ConsoleApplication` 任务菜单 | `ConsoleApplicationTest.taskMenuAcceptsChinesePriorityAndStatusFiltersAndDisplaysChineseEnums` | 中文优先级 `高`、中文状态 `已完成` | 服务层筛选成功，列表显示 `高`、`已完成` | 通过 |
+| CONSOLE-02 | 控制台交互单元测试 | 等价类 | `ConsoleApplication` 任务菜单 | `ConsoleApplicationTest.taskMenuKeepsEnglishPriorityAndStatusInputCompatible` | 英文优先级和状态输入 | 保持兼容且用户可见输出为中文枚举含义 | 通过 |
+| CONSOLE-03 | 控制台交互单元测试 | 错误推测 | `ConsoleApplication` 任务菜单 | `ConsoleApplicationTest.taskMenuRejectsInvalidEnumInputWithChineseOptions` | 非法优先级、非法状态 | 输出中文优先错误提示并保留英文兼容说明 | 通过 |
+| CONSOLE-04 | 控制台交互单元测试 | 等价类 | `ConsoleApplication` 日程菜单 | `ConsoleApplicationTest.scheduleMenuAcceptsChineseStatusFilterAndDisplaysChineseStatus` | 中文日程状态 `进行中` | 筛选成功且列表显示中文日程状态 | 通过 |
+| CONSOLE-05 | 控制台交互单元测试 | 等价类 | `ConsoleApplication` 学习计划菜单 | `ConsoleApplicationTest.studyPlanMenuAcceptsChineseStatusFilterAndDisplaysChineseStatus` | 中文学习计划状态 `进行中` | 筛选成功且列表显示中文学习计划状态 | 通过 |
+| CONSOLE-06 | 控制台交互单元测试 | 等价类 | `ConsoleApplication` 收支菜单 | `ConsoleApplicationTest.financeMenuAcceptsChineseTypeFilterAndDisplaysChineseType` | 中文收支类型 `收入` | 筛选成功且列表显示中文收支类型 | 通过 |
+| CONSOLE-07 | 控制台交互单元测试 | 等价类 | `ConsoleApplication` 收支菜单 | `ConsoleApplicationTest.financeMenuKeepsEnglishTypeInputCompatible` | 英文收支类型输入，含大小写混合 | 保持兼容且用户可见输出为中文收支类型 | 通过 |
+| CONSOLE-08 | 控制台交互单元测试 | 等价类 | `ConsoleApplication` AI 草稿菜单 | `ConsoleApplicationTest.draftMenuDisplaysChineseDraftTypeStatusAndTaskPriority` | 任务草稿详情含类型、状态和任务优先级 | 草稿类型、草稿状态和任务草稿优先级均显示中文 | 通过 |
+
 ## 跨模块场景链路
 
 | 链路 | 覆盖用例 | 预期同步关系 | 实际结果 |
 |------|----------|--------------|----------|
-| AI 任务草稿确认导入到任务服务 | DRAFT-04, DRAFT-07, TASK-08 | 导入成功后任务列表和摘要可见新任务 | 通过 |
+| AI 任务草稿确认导入到任务服务 | DRAFT-04, DRAFT-07, TASK-08, CONSOLE-08 | 导入成功后任务列表和摘要可见新任务，控制台草稿详情中文展示 | 通过 |
 | AI 学习计划草稿确认导入到学习计划服务和任务服务 | DRAFT-09, DRAFT-16, STUDY-01, TASK-08, SUMMARY-02 | 导入成功后本周学习计划摘要可见，breakdown 步骤同步为任务服务可见的待办 | 通过 |
 | AI 草稿取消不写入本地业务数据 | DRAFT-05 | 取消后任务和学习计划数据不变化 | 通过 |
 | AI 草稿导入失败回滚 | DRAFT-08 | 任务批量导入中途失败时已创建任务被删除 | 通过 |

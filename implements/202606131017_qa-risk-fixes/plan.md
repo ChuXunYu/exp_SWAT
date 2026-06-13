@@ -31,3 +31,14 @@
 任务：扩展摘要数据结构、摘要服务、AI 本地上下文和控制台汇总页，使其在保留今日任务的基础上展示逾期未完成任务、未来 7 天 HIGH 且未完成任务；补充 SummaryService、DashboardSummary/LocalContext、ConsoleApplication 和文档一致性相关测试，同步 README、测试计划或测试用例中受影响说明。
 选择理由：AI 草稿主链路、任务 dueDate 一致性和学习计划 breakdown 落地已经通过验证；摘要漏掉逾期未完成任务和未来高优先级任务仍是本轮必须修复的真实用户主流程风险，且独立于中文枚举体验，适合下一轮单独处理。
 上下文：SummaryService.getDashboardSummary() 当前只用 TaskQuery.byDueDate(today) 查询今日任务；DashboardSummary 只有 todayTasks 字段，没有 overdueTasks 或 upcomingHighPriorityTasks；LocalContext.from(...) 只生成 todayTaskLines，overviewText 也只包含今日任务数；ConsoleApplication.showSummary() 只输出今日任务数。TaskQuery 当前支持 status/priority/dueDate 单日匹配，不支持日期范围；可在 SummaryService 内用现有 TaskService.listTasks(TaskQuery.all()) 或组合现有查询后过滤，避免为本轮小修扩大仓储接口。规则建议固定为：逾期未完成任务 = dueDate 早于 today 且 status != COMPLETED；未来 7 天高优先级未完成任务 = dueDate 在 today 到 today.plusDays(7) 闭区间内、priority == HIGH、status != COMPLETED；文档和测试必须与该边界一致。
+
+---
+
+## R4 PASSED 摘要页紧急任务视图
+结果：DashboardSummary、SummaryService、LocalContext、PromptBuilder 和 ConsoleApplication 已新增逾期未完成任务与未来 7 天高优先级未完成任务视图；摘要页、AI 本地上下文和 prompt 均包含新增紧急事项信息。
+测试：新增和更新 SummaryServiceTest、DashboardSummaryTest、LocalContextTest、PromptBuilderTest、ConsoleApplicationTest、DocumentationDeliveryTest 及测试文档；验证报告显示 mvn test 通过 983 个测试。
+
+## R4 NEW 中文控制台枚举输入与展示体验
+任务：在 ConsoleApplication 中集中补齐任务优先级、任务状态、日程状态、学习计划状态、收支类型等枚举的中文别名输入和中文优先展示；保留现有英文枚举输入兼容；同步控制台测试和受影响测试文档。
+选择理由：本轮需求中已确认必须修复的前四项风险均已通过验证；剩余必须修复项是中文 CLI 暴露英文枚举，主要集中在控制台输入解析、错误提示、列表/详情输出和草稿/摘要展示，适合单独一轮降低回归面。
+上下文：ConsoleApplication 当前提示、解析失败消息和输出详情大量直接使用 LOW/MEDIUM/HIGH、TODO/COMPLETED、UPCOMING/ONGOING/EXPIRED、NOT_STARTED/IN_PROGRESS/COMPLETED/OVERDUE_INCOMPLETE、INCOME/EXPENSE 等内部枚举名；ConsoleApplicationTest 也固定了这些英文输入和输出。实现应避免改变服务层枚举建模，只在控制台层增加中文解析/格式化 helper，例如优先级支持“低/中/高”和英文别名，任务状态支持“未完成/已完成”和英文别名，收支类型支持“收入/支出”和英文别名。非法输入应列出中文可选值并可附带英文别名。

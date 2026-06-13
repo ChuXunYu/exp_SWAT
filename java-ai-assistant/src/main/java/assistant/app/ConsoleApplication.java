@@ -2,6 +2,8 @@ package assistant.app;
 
 import assistant.ai.AiScenario;
 import assistant.ai.StudyPlanDraftContent;
+import assistant.ai.SuggestionDraftStatus;
+import assistant.ai.SuggestionDraftType;
 import assistant.ai.SuggestionDraftView;
 import assistant.ai.TaskDraftItem;
 import assistant.common.DateRange;
@@ -145,8 +147,8 @@ public final class ConsoleApplication {
         for (TaskView task : tasks) {
             output.println("- " + task.title()
                     + " | 截止 " + task.dueDate()
-                    + " | " + task.priority()
-                    + " | " + task.status());
+                    + " | " + displayTaskPriority(task.priority())
+                    + " | " + displayTaskStatus(task.status()));
         }
     }
 
@@ -223,7 +225,7 @@ public final class ConsoleApplication {
         if (description == null) {
             return;
         }
-        ParsedInput<TaskPriority> priority = readRequiredTaskPriority("优先级(LOW/MEDIUM/HIGH): ");
+        ParsedInput<TaskPriority> priority = readRequiredTaskPriority("优先级(低/中/高，可输入 LOW/MEDIUM/HIGH): ");
         if (!priority.hasValue()) {
             return;
         }
@@ -243,11 +245,11 @@ public final class ConsoleApplication {
     }
 
     private void filterTasks() {
-        ParsedInput<TaskStatus> status = readOptionalTaskStatus("状态(TODO/COMPLETED，可空): ");
+        ParsedInput<TaskStatus> status = readOptionalTaskStatus("状态(未完成/已完成，可输入 TODO/COMPLETED，可空): ");
         if (status.isInvalid() || status.isEof()) {
             return;
         }
-        ParsedInput<TaskPriority> priority = readOptionalTaskPriority("优先级(LOW/MEDIUM/HIGH，可空): ");
+        ParsedInput<TaskPriority> priority = readOptionalTaskPriority("优先级(低/中/高，可输入 LOW/MEDIUM/HIGH，可空): ");
         if (priority.isInvalid() || priority.isEof()) {
             return;
         }
@@ -279,7 +281,7 @@ public final class ConsoleApplication {
         if (description == null) {
             return;
         }
-        ParsedInput<TaskPriority> priority = readRequiredTaskPriority("优先级(LOW/MEDIUM/HIGH): ");
+        ParsedInput<TaskPriority> priority = readRequiredTaskPriority("优先级(低/中/高，可输入 LOW/MEDIUM/HIGH): ");
         if (!priority.hasValue()) {
             return;
         }
@@ -330,8 +332,8 @@ public final class ConsoleApplication {
         }
         tasks.forEach(task -> output.println(task.id().value()
                 + " | " + task.title()
-                + " | " + task.priority()
-                + " | " + task.status()
+                + " | " + displayTaskPriority(task.priority())
+                + " | " + displayTaskStatus(task.status())
                 + " | 截止 " + task.dueDate()));
     }
 
@@ -339,8 +341,8 @@ public final class ConsoleApplication {
         output.println("任务详情");
         output.println("ID: " + task.id().value());
         output.println("标题: " + task.title());
-        output.println("优先级: " + task.priority());
-        output.println("状态: " + task.status());
+        output.println("优先级: " + displayTaskPriority(task.priority()));
+        output.println("状态: " + displayTaskStatus(task.status()));
         output.println("截止日期: " + task.dueDate());
         output.println("描述: " + task.description());
     }
@@ -437,19 +439,44 @@ public final class ConsoleApplication {
     }
 
     private TaskPriority parseTaskPriority(String rawValue) {
+        String normalized = normalizeEnumInput(rawValue);
+        switch (normalized) {
+            case "低" -> {
+                return TaskPriority.LOW;
+            }
+            case "中" -> {
+                return TaskPriority.MEDIUM;
+            }
+            case "高" -> {
+                return TaskPriority.HIGH;
+            }
+            default -> {
+            }
+        }
         try {
-            return TaskPriority.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+            return TaskPriority.valueOf(normalized.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            printValidationError("优先级必须是 LOW、MEDIUM 或 HIGH");
+            printValidationError("优先级必须是 低、中、高（也可输入 LOW、MEDIUM、HIGH）");
             return null;
         }
     }
 
     private TaskStatus parseTaskStatus(String rawValue) {
+        String normalized = normalizeEnumInput(rawValue);
+        switch (normalized) {
+            case "未完成" -> {
+                return TaskStatus.TODO;
+            }
+            case "已完成" -> {
+                return TaskStatus.COMPLETED;
+            }
+            default -> {
+            }
+        }
         try {
-            return TaskStatus.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+            return TaskStatus.valueOf(normalized.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            printValidationError("状态必须是 TODO 或 COMPLETED");
+            printValidationError("状态必须是 未完成 或 已完成（也可输入 TODO 或 COMPLETED）");
             return null;
         }
     }
@@ -465,6 +492,64 @@ public final class ConsoleApplication {
 
     private void printValidationError(String message) {
         output.println("失败: VALIDATION_ERROR - " + message);
+    }
+
+    private static String normalizeEnumInput(String rawValue) {
+        return rawValue.strip();
+    }
+
+    private static String displayTaskPriority(TaskPriority priority) {
+        return switch (priority) {
+            case LOW -> "低";
+            case MEDIUM -> "中";
+            case HIGH -> "高";
+        };
+    }
+
+    private static String displayTaskStatus(TaskStatus status) {
+        return switch (status) {
+            case TODO -> "未完成";
+            case COMPLETED -> "已完成";
+        };
+    }
+
+    private static String displayScheduleStatus(ScheduleStatus status) {
+        return switch (status) {
+            case UPCOMING -> "即将开始";
+            case ONGOING -> "进行中";
+            case EXPIRED -> "已过期";
+        };
+    }
+
+    private static String displayStudyPlanStatus(StudyPlanStatus status) {
+        return switch (status) {
+            case NOT_STARTED -> "未开始";
+            case IN_PROGRESS -> "进行中";
+            case COMPLETED -> "已完成";
+            case OVERDUE_INCOMPLETE -> "逾期未完成";
+        };
+    }
+
+    private static String displayTransactionType(TransactionType type) {
+        return switch (type) {
+            case INCOME -> "收入";
+            case EXPENSE -> "支出";
+        };
+    }
+
+    private static String displayDraftType(SuggestionDraftType type) {
+        return switch (type) {
+            case TASK_DRAFT -> "任务草稿";
+            case STUDY_PLAN_DRAFT -> "学习计划草稿";
+        };
+    }
+
+    private static String displayDraftStatus(SuggestionDraftStatus status) {
+        return switch (status) {
+            case CONFIRMABLE -> "待确认";
+            case CANCELLED -> "已取消";
+            case IMPORTED -> "已导入";
+        };
     }
 
     private void runScheduleMenu() {
@@ -562,7 +647,7 @@ public final class ConsoleApplication {
         if (date.isInvalid() || date.isEof()) {
             return;
         }
-        ParsedInput<ScheduleStatus> status = readOptionalScheduleStatus("状态(UPCOMING/ONGOING/EXPIRED，可空): ");
+        ParsedInput<ScheduleStatus> status = readOptionalScheduleStatus("状态(即将开始/进行中/已过期，可输入 UPCOMING/ONGOING/EXPIRED，可空): ");
         if (status.isInvalid() || status.isEof()) {
             return;
         }
@@ -626,7 +711,7 @@ public final class ConsoleApplication {
         }
         schedules.forEach(schedule -> output.println(schedule.id().value()
                 + " | " + schedule.name()
-                + " | " + schedule.status()
+                + " | " + displayScheduleStatus(schedule.status())
                 + " | " + schedule.startDateTime()
                 + " ~ " + schedule.endDateTime()
                 + " | " + schedule.location()));
@@ -636,7 +721,7 @@ public final class ConsoleApplication {
         output.println("日程详情");
         output.println("ID: " + schedule.id().value());
         output.println("名称: " + schedule.name());
-        output.println("状态: " + schedule.status());
+        output.println("状态: " + displayScheduleStatus(schedule.status()));
         output.println("开始时间: " + schedule.startDateTime());
         output.println("结束时间: " + schedule.endDateTime());
         output.println("地点: " + schedule.location());
@@ -747,10 +832,24 @@ public final class ConsoleApplication {
     }
 
     private ScheduleStatus parseScheduleStatus(String rawValue) {
+        String normalized = normalizeEnumInput(rawValue);
+        switch (normalized) {
+            case "即将开始" -> {
+                return ScheduleStatus.UPCOMING;
+            }
+            case "进行中" -> {
+                return ScheduleStatus.ONGOING;
+            }
+            case "已过期" -> {
+                return ScheduleStatus.EXPIRED;
+            }
+            default -> {
+            }
+        }
         try {
-            return ScheduleStatus.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+            return ScheduleStatus.valueOf(normalized.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            printValidationError("状态必须是 UPCOMING、ONGOING 或 EXPIRED");
+            printValidationError("日程状态必须是 即将开始、进行中 或 已过期（也可输入 UPCOMING、ONGOING、EXPIRED）");
             return null;
         }
     }
@@ -861,7 +960,7 @@ public final class ConsoleApplication {
 
     private void filterStudyPlans() {
         ParsedInput<StudyPlanStatus> status = readOptionalStudyPlanStatus(
-                "状态(NOT_STARTED/IN_PROGRESS/COMPLETED/OVERDUE_INCOMPLETE，可空): ");
+                "状态(未开始/进行中/已完成/逾期未完成，可输入 NOT_STARTED/IN_PROGRESS/COMPLETED/OVERDUE_INCOMPLETE，可空): ");
         if (status.isInvalid() || status.isEof()) {
             return;
         }
@@ -943,7 +1042,7 @@ public final class ConsoleApplication {
         }
         plans.forEach(plan -> output.println(plan.id().value()
                 + " | " + plan.goalName()
-                + " | " + plan.status()
+                + " | " + displayStudyPlanStatus(plan.status())
                 + " | 进度 " + plan.progress().value() + "%"
                 + " | " + plan.startDate()
                 + " ~ " + plan.endDate()
@@ -954,7 +1053,7 @@ public final class ConsoleApplication {
         output.println("学习计划详情");
         output.println("ID: " + plan.id().value());
         output.println("目标: " + plan.goalName());
-        output.println("状态: " + plan.status());
+        output.println("状态: " + displayStudyPlanStatus(plan.status()));
         output.println("进度: " + plan.progress().value() + "%");
         output.println("开始日期: " + plan.startDate());
         output.println("截止日期: " + plan.endDate());
@@ -1141,10 +1240,27 @@ public final class ConsoleApplication {
     }
 
     private StudyPlanStatus parseStudyPlanStatus(String rawValue) {
+        String normalized = normalizeEnumInput(rawValue);
+        switch (normalized) {
+            case "未开始" -> {
+                return StudyPlanStatus.NOT_STARTED;
+            }
+            case "进行中" -> {
+                return StudyPlanStatus.IN_PROGRESS;
+            }
+            case "已完成" -> {
+                return StudyPlanStatus.COMPLETED;
+            }
+            case "逾期未完成" -> {
+                return StudyPlanStatus.OVERDUE_INCOMPLETE;
+            }
+            default -> {
+            }
+        }
         try {
-            return StudyPlanStatus.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+            return StudyPlanStatus.valueOf(normalized.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            printValidationError("状态必须是 NOT_STARTED、IN_PROGRESS、COMPLETED 或 OVERDUE_INCOMPLETE");
+            printValidationError("学习计划状态必须是 未开始、进行中、已完成 或 逾期未完成（也可输入 NOT_STARTED、IN_PROGRESS、COMPLETED、OVERDUE_INCOMPLETE）");
             return null;
         }
     }
@@ -1290,7 +1406,7 @@ public final class ConsoleApplication {
         if (!id.hasValue()) {
             return;
         }
-        ParsedInput<TransactionType> type = readRequiredTransactionType("类型(INCOME/EXPENSE): ");
+        ParsedInput<TransactionType> type = readRequiredTransactionType("类型(收入/支出，可输入 INCOME/EXPENSE): ");
         if (!type.hasValue()) {
             return;
         }
@@ -1352,7 +1468,7 @@ public final class ConsoleApplication {
             return;
         }
         transactions.forEach(transaction -> output.println(transaction.id().value()
-                + " | " + transaction.type()
+                + " | " + displayTransactionType(transaction.type())
                 + " | " + transaction.amount().value().toPlainString()
                 + " | " + transaction.category()
                 + " | " + transaction.date()
@@ -1362,7 +1478,7 @@ public final class ConsoleApplication {
     private void printTransactionDetail(TransactionView transaction) {
         output.println("收支记录详情");
         output.println("ID: " + transaction.id().value());
-        output.println("类型: " + transaction.type());
+        output.println("类型: " + displayTransactionType(transaction.type()));
         output.println("金额: " + transaction.amount().value().toPlainString());
         output.println("类别: " + transaction.category());
         output.println("日期: " + transaction.date());
@@ -1469,7 +1585,7 @@ public final class ConsoleApplication {
     }
 
     private ParsedInput<TransactionQuery> readOptionalTransactionQuery() {
-        ParsedInput<TransactionType> type = readOptionalTransactionType("类型(INCOME/EXPENSE，可空): ");
+        ParsedInput<TransactionType> type = readOptionalTransactionType("类型(收入/支出，可输入 INCOME/EXPENSE，可空): ");
         if (type.isInvalid() || type.isEof()) {
             return type.isEof() ? ParsedInput.eof() : ParsedInput.invalid();
         }
@@ -1504,10 +1620,21 @@ public final class ConsoleApplication {
     }
 
     private TransactionType parseTransactionType(String rawValue) {
+        String normalized = normalizeEnumInput(rawValue);
+        switch (normalized) {
+            case "收入" -> {
+                return TransactionType.INCOME;
+            }
+            case "支出" -> {
+                return TransactionType.EXPENSE;
+            }
+            default -> {
+            }
+        }
         try {
-            return TransactionType.valueOf(rawValue.strip().toUpperCase(Locale.ROOT));
+            return TransactionType.valueOf(normalized.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            printValidationError("收支类型必须是 INCOME 或 EXPENSE");
+            printValidationError("收支类型必须是 收入 或 支出（也可输入 INCOME 或 EXPENSE）");
             return null;
         }
     }
@@ -1934,8 +2061,8 @@ public final class ConsoleApplication {
             return;
         }
         drafts.forEach(draft -> output.println(draft.id().value()
-                + " | " + draft.type()
-                + " | " + draft.status()
+                + " | " + displayDraftType(draft.type())
+                + " | " + displayDraftStatus(draft.status())
                 + " | 任务 " + draft.tasks().size()
                 + " | 学习计划 " + draft.studyPlan().isPresent()));
     }
@@ -1943,8 +2070,8 @@ public final class ConsoleApplication {
     private void printDraftDetail(SuggestionDraftView draft) {
         output.println("AI 草稿详情");
         output.println("ID: " + draft.id().value());
-        output.println("类型: " + draft.type());
-        output.println("状态: " + draft.status());
+        output.println("类型: " + displayDraftType(draft.type()));
+        output.println("状态: " + displayDraftStatus(draft.status()));
         printTaskDraftItems(draft.tasks());
         printStudyPlanDraft(draft);
     }
@@ -1963,7 +2090,7 @@ public final class ConsoleApplication {
     private void printTaskDraftItem(int index, TaskDraftItem item) {
         output.println("任务 " + index);
         output.println("标题: " + item.title());
-        output.println("优先级: " + item.priority());
+        output.println("优先级: " + displayTaskPriority(item.priority()));
         output.println("截止日期: " + formatDraftDueDate(item));
         output.println("描述: " + item.description());
     }

@@ -91,8 +91,8 @@ class ConsoleApplicationTest {
                 () -> assertContains(output, "今日:"),
                 () -> assertContains(output, "逾期未完成任务数: 1"),
                 () -> assertContains(output, "未来7天高优先级任务数: 1"),
-                () -> assertContains(output, "逾期未完成任务:\n- 逾期任务 | 截止 2026-01-14 | HIGH | TODO"),
-                () -> assertContains(output, "未来7天高优先级任务:\n- 完成今日重点工作 | 截止 2026-01-15 | HIGH | TODO"),
+                () -> assertContains(output, "逾期未完成任务:\n- 逾期任务 | 截止 2026-01-14 | 高 | 未完成"),
+                () -> assertContains(output, "未来7天高优先级任务:\n- 完成今日重点工作 | 截止 2026-01-15 | 高 | 未完成"),
                 () -> assertContains(output, "本月收入:"),
                 () -> assertContains(output, "本月结余:"));
     }
@@ -157,7 +157,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "名称: 今日会议"),
-                () -> assertContains(output, "1 | 今日会议 | UPCOMING | 2026-01-15T09:30 ~ 2026-01-15T10:00 | 会议室"),
+                () -> assertContains(output, "1 | 今日会议 | 即将开始 | 2026-01-15T09:30 ~ 2026-01-15T10:00 | 会议室"),
                 () -> assertContains(output, "今日日程数: 1"));
     }
 
@@ -210,6 +210,20 @@ class ConsoleApplicationTest {
     }
 
     @Test
+    void scheduleMenuAcceptsChineseStatusFilterAndDisplaysChineseStatus() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "3\na\n进行中日程\n2026-01-15T08:30\n2026-01-15T09:30\nA\nN\n"
+                        + "a\n稍后日程\n2026-01-15T10:00\n2026-01-15T10:30\nB\nN\n"
+                        + "f\n2026-01-15\n进行中\nb\nq\n");
+
+        String filtered = between(output, "日程筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "1 | 进行中日程 | 进行中 | 2026-01-15T08:30 ~ 2026-01-15T09:30 | A"),
+                () -> assertNotContains(filtered, "稍后日程"));
+    }
+
+    @Test
     void scheduleMenuFilterEmptyFieldsListAllSchedules() {
         String output = runWithInput(
                 servicesWithoutDemoData(),
@@ -250,7 +264,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
                 () -> assertContains(output, "日程 id 必须是正整数"),
-                () -> assertContains(output, "1 | 保留日程 | UPCOMING | 2026-01-15T09:30 ~ 2026-01-15T10:00 | A"));
+                () -> assertContains(output, "1 | 保留日程 | 即将开始 | 2026-01-15T09:30 ~ 2026-01-15T10:00 | A"));
     }
 
     @Test
@@ -275,7 +289,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
                 () -> assertContains(output, "日程日期格式必须是 yyyy-MM-dd"),
-                () -> assertContains(output, "1 | 保留日程 | UPCOMING | 2026-01-15T09:30 ~ 2026-01-15T10:00 | A"));
+                () -> assertContains(output, "1 | 保留日程 | 即将开始 | 2026-01-15T09:30 ~ 2026-01-15T10:00 | A"));
     }
 
     @Test
@@ -310,8 +324,8 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
-                () -> assertContains(output, "状态必须是 UPCOMING、ONGOING 或 EXPIRED"),
-                () -> assertContains(output, "1 | 保留日程 | UPCOMING | 2026-01-15T09:30 ~ 2026-01-15T10:00 | A"));
+                () -> assertContains(output, "日程状态必须是 即将开始、进行中 或 已过期（也可输入 UPCOMING、ONGOING、EXPIRED）"),
+                () -> assertContains(output, "1 | 保留日程 | 即将开始 | 2026-01-15T09:30 ~ 2026-01-15T10:00 | A"));
     }
 
     @Test
@@ -334,7 +348,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
-                () -> assertContains(output, "状态必须是 UPCOMING、ONGOING 或 EXPIRED"));
+                () -> assertContains(output, "日程状态必须是 即将开始、进行中 或 已过期（也可输入 UPCOMING、ONGOING、EXPIRED）"));
         org.mockito.Mockito.verifyNoInteractions(scheduleService);
     }
 
@@ -419,7 +433,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "标题: 今日任务"),
-                () -> assertContains(output, "1 | 今日任务 | HIGH | TODO | 截止 2026-01-15"),
+                () -> assertContains(output, "1 | 今日任务 | 高 | 未完成 | 截止 2026-01-15"),
                 () -> assertContains(output, "今日任务数: 1"));
     }
 
@@ -445,9 +459,9 @@ class ConsoleApplicationTest {
                 "2\na\n任务\n描述\nHIGH\n2026-01-15\nc\n1\nc\n1\nr\n1\nb\nq\n");
 
         assertAll(
-                () -> assertContains(output, "状态: COMPLETED"),
+                () -> assertContains(output, "状态: 已完成"),
                 () -> assertContains(output, "STATE_CONFLICT"),
-                () -> assertContains(output, "状态: TODO"));
+                () -> assertContains(output, "状态: 未完成"));
     }
 
     @Test
@@ -462,6 +476,30 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(filtered, "匹配任务"),
                 () -> assertNotContains(filtered, "非匹配任务"));
+    }
+
+    @Test
+    void taskMenuAcceptsChinesePriorityAndStatusFiltersAndDisplaysChineseEnums() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n匹配任务\n描述\n高\n2026-01-15\n"
+                        + "a\n非匹配任务\n描述\n低\n2026-01-16\n"
+                        + "c\n1\nf\n已完成\n高\n2026-01-15\nb\nq\n");
+
+        String filtered = between(output, "任务筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "1 | 匹配任务 | 高 | 已完成 | 截止 2026-01-15"),
+                () -> assertNotContains(filtered, "非匹配任务"));
+    }
+
+    @Test
+    void taskMenuKeepsEnglishPriorityAndStatusInputCompatible() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n英文任务\n描述\nhigh\n2026-01-15\nf\nTODO\nHIGH\n2026-01-15\nb\nq\n");
+
+        String filtered = between(output, "任务筛选结果", "主菜单");
+        assertContains(filtered, "1 | 英文任务 | 高 | 未完成 | 截止 2026-01-15");
     }
 
     @Test
@@ -487,7 +525,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
                 () -> assertContains(output, "任务 id 必须是正整数"),
-                () -> assertContains(output, "1 | 保留任务 | MEDIUM | TODO | 截止 2026-01-15"));
+                () -> assertContains(output, "1 | 保留任务 | 中 | 未完成 | 截止 2026-01-15"));
     }
 
     @Test
@@ -512,7 +550,7 @@ class ConsoleApplicationTest {
         String list = between(output, "任务列表", "主菜单");
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
-                () -> assertContains(output, "优先级必须是 LOW、MEDIUM 或 HIGH"),
+                () -> assertContains(output, "优先级必须是 低、中、高（也可输入 LOW、MEDIUM、HIGH）"),
                 () -> assertNotContains(list, "坏优先级任务"));
     }
 
@@ -524,8 +562,21 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
-                () -> assertContains(output, "状态必须是 TODO 或 COMPLETED"),
-                () -> assertContains(output, "1 | 保留任务 | MEDIUM | TODO | 截止 2026-01-15"));
+                () -> assertContains(output, "状态必须是 未完成 或 已完成（也可输入 TODO 或 COMPLETED）"),
+                () -> assertContains(output, "1 | 保留任务 | 中 | 未完成 | 截止 2026-01-15"));
+    }
+
+    @Test
+    void taskMenuRejectsInvalidEnumInputWithChineseOptions() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "2\na\n坏优先级任务\n描述\nURGENT\n"
+                        + "a\n保留任务\n描述\n中\n2026-01-15\nf\nDONE\nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "优先级必须是 低、中、高（也可输入 LOW、MEDIUM、HIGH）"),
+                () -> assertContains(output, "状态必须是 未完成 或 已完成（也可输入 TODO 或 COMPLETED）"),
+                () -> assertContains(output, "1 | 保留任务 | 中 | 未完成 | 截止 2026-01-15"));
     }
 
     @Test
@@ -596,7 +647,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "目标: 本周学习"),
-                () -> assertContains(output, "1 | 本周学习 | IN_PROGRESS | 进度 25% | 2026-01-13 ~ 2026-01-18 | 预期 8 小时"),
+                () -> assertContains(output, "1 | 本周学习 | 进行中 | 进度 25% | 2026-01-13 ~ 2026-01-18 | 预期 8 小时"),
                 () -> assertContains(output, "学习计划详情"),
                 () -> assertContains(output, "本周学习计划数: 1"));
     }
@@ -634,6 +685,20 @@ class ConsoleApplicationTest {
     }
 
     @Test
+    void studyPlanMenuAcceptsChineseStatusFilterAndDisplaysChineseStatus() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "4\na\n进行中学习\n2026-01-13\n2026-01-18\n8\n30\n"
+                        + "a\n完成学习\n2026-02-01\n2026-02-05\n5\n100\n"
+                        + "f\n进行中\n2026-01-13\n2026-01-18\nb\nq\n");
+
+        String filtered = between(output, "学习计划筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "1 | 进行中学习 | 进行中 | 进度 30% | 2026-01-13 ~ 2026-01-18 | 预期 8 小时"),
+                () -> assertNotContains(filtered, "完成学习"));
+    }
+
+    @Test
     void studyPlanMenuFilterEmptyFieldsListAllPlans() {
         String output = runWithInput(
                 servicesWithoutDemoData(),
@@ -667,7 +732,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "进度: 100%"),
-                () -> assertContains(output, "状态: COMPLETED"));
+                () -> assertContains(output, "状态: 已完成"));
     }
 
     @Test
@@ -695,7 +760,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
                 () -> assertContains(output, "学习计划 id 必须是正整数"),
-                () -> assertContains(output, "1 | 保留学习 | IN_PROGRESS | 进度 0% | 2026-01-13 ~ 2026-01-18 | 预期 8 小时"));
+                () -> assertContains(output, "1 | 保留学习 | 进行中 | 进度 0% | 2026-01-13 ~ 2026-01-18 | 预期 8 小时"));
     }
 
     @Test
@@ -833,7 +898,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
-                () -> assertContains(output, "状态必须是 NOT_STARTED、IN_PROGRESS、COMPLETED 或 OVERDUE_INCOMPLETE"));
+                () -> assertContains(output, "学习计划状态必须是 未开始、进行中、已完成 或 逾期未完成（也可输入 NOT_STARTED、IN_PROGRESS、COMPLETED、OVERDUE_INCOMPLETE）"));
         org.mockito.Mockito.verifyNoInteractions(studyPlanService);
     }
 
@@ -907,8 +972,8 @@ class ConsoleApplicationTest {
                         + "l\ns\n\n\n\n\nb\n1\nq\n");
 
         assertAll(
-                () -> assertContains(output, "1 | INCOME | 1000.00 | 工资 | 2026-01-15 | 一月工资"),
-                () -> assertContains(output, "2 | EXPENSE | 120.50 | 餐饮 | 2026-01-15 | 午餐"),
+                () -> assertContains(output, "1 | 收入 | 1000.00 | 工资 | 2026-01-15 | 一月工资"),
+                () -> assertContains(output, "2 | 支出 | 120.50 | 餐饮 | 2026-01-15 | 午餐"),
                 () -> assertContains(output, "收入: 1000.00"),
                 () -> assertContains(output, "支出: 120.50"),
                 () -> assertContains(output, "结余: 879.50"),
@@ -926,9 +991,9 @@ class ConsoleApplicationTest {
                         + "d\n1\nv\n1\nb\nq\n");
 
         assertAll(
-                () -> assertContains(output, "类型: INCOME"),
+                () -> assertContains(output, "类型: 收入"),
                 () -> assertContains(output, "金额: 100.00"),
-                () -> assertContains(output, "类型: EXPENSE"),
+                () -> assertContains(output, "类型: 支出"),
                 () -> assertContains(output, "金额: 80.25"),
                 () -> assertContains(output, "类别: 交通"),
                 () -> assertContains(output, "日期: 2026-01-11"),
@@ -951,6 +1016,20 @@ class ConsoleApplicationTest {
                 () -> assertContains(output, "收入: 300.00"),
                 () -> assertContains(output, "支出: 0.00"),
                 () -> assertContains(filtered, "匹配收入"),
+                () -> assertNotContains(filtered, "非匹配支出"));
+    }
+
+    @Test
+    void financeMenuAcceptsChineseTypeFilterAndDisplaysChineseType() {
+        String output = runWithInput(
+                servicesWithoutDemoData(),
+                "5\ni\n300.00\n工资\n2026-01-15\n匹配收入\n"
+                        + "e\n50.00\n餐饮\n2026-01-20\n非匹配支出\n"
+                        + "f\n收入\n工资\n2026-01-01\n2026-01-31\nb\nq\n");
+
+        String filtered = between(output, "收支筛选结果", "主菜单");
+        assertAll(
+                () -> assertContains(filtered, "1 | 收入 | 300.00 | 工资 | 2026-01-15 | 匹配收入"),
                 () -> assertNotContains(filtered, "非匹配支出"));
     }
 
@@ -984,7 +1063,7 @@ class ConsoleApplicationTest {
     }
 
     @Test
-    void financeMenuAcceptsLongCommandAliasesAndCaseInsensitiveType() {
+    void financeMenuKeepsEnglishTypeInputCompatible() {
         String output = runWithInput(
                 servicesWithoutDemoData(),
                 "5\nincome\n55.00\n礼金\n2026-01-15\n别名记录\n"
@@ -993,8 +1072,8 @@ class ConsoleApplicationTest {
 
         String filtered = between(output, "收支筛选结果", "收支统计");
         assertAll(
-                () -> assertContains(output, "类型: INCOME"),
-                () -> assertContains(output, "类型: EXPENSE"),
+                () -> assertContains(output, "类型: 收入"),
+                () -> assertContains(output, "类型: 支出"),
                 () -> assertContains(filtered, "已改"),
                 () -> assertContains(output, "操作成功"));
     }
@@ -1053,7 +1132,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
-                () -> assertContains(output, "收支类型必须是 INCOME 或 EXPENSE"));
+                () -> assertContains(output, "收支类型必须是 收入 或 支出（也可输入 INCOME 或 EXPENSE）"));
         verifyNoInteractions(financeService);
     }
 
@@ -1077,7 +1156,7 @@ class ConsoleApplicationTest {
 
         assertAll(
                 () -> assertContains(output, "VALIDATION_ERROR"),
-                () -> assertContains(output, "收支类型必须是 INCOME 或 EXPENSE"));
+                () -> assertContains(output, "收支类型必须是 收入 或 支出（也可输入 INCOME 或 EXPENSE）"));
         verify(financeService, never()).updateTransaction(
                 any(),
                 any(),
@@ -1147,10 +1226,10 @@ class ConsoleApplicationTest {
 
         String list = between(output, "收支记录列表", "主菜单");
         assertAll(
-                () -> assertContains(list, "1 | INCOME | 1.00 | 测试 | 2026-01-15 | 记录1"),
-                () -> assertContains(list, "10 | INCOME | 10.00 | 测试 | 2026-01-15 | 记录10"),
-                () -> assertContains(list, "11 | INCOME | 11.00 | 测试 | 2026-01-15 | 记录11"),
-                () -> assertContains(list, "12 | INCOME | 12.00 | 测试 | 2026-01-15 | 记录12"));
+                () -> assertContains(list, "1 | 收入 | 1.00 | 测试 | 2026-01-15 | 记录1"),
+                () -> assertContains(list, "10 | 收入 | 10.00 | 测试 | 2026-01-15 | 记录10"),
+                () -> assertContains(list, "11 | 收入 | 11.00 | 测试 | 2026-01-15 | 记录11"),
+                () -> assertContains(list, "12 | 收入 | 12.00 | 测试 | 2026-01-15 | 记录12"));
     }
 
     @Test
@@ -1500,8 +1579,8 @@ class ConsoleApplicationTest {
 
         String list = between(output, "AI 草稿列表", "主菜单");
         assertAll(
-                () -> assertContains(list, "1 | TASK_DRAFT | CONFIRMABLE | 任务 1 | 学习计划 false"),
-                () -> assertContains(list, "11 | TASK_DRAFT | CONFIRMABLE | 任务 1 | 学习计划 false"));
+                () -> assertContains(list, "1 | 任务草稿 | 待确认 | 任务 1 | 学习计划 false"),
+                () -> assertContains(list, "11 | 任务草稿 | 待确认 | 任务 1 | 学习计划 false"));
     }
 
     @Test
@@ -1522,7 +1601,7 @@ class ConsoleApplicationTest {
     }
 
     @Test
-    void draftMenuViewsTaskDraftDetail() {
+    void draftMenuDisplaysChineseDraftTypeStatusAndTaskPriority() {
         ApplicationServices baseServices = servicesWithoutDemoData();
         DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
         when(draftLifecycleService.getDraft(new EntityId(1)))
@@ -1534,10 +1613,10 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "AI 草稿详情"),
                 () -> assertContains(output, "ID: 1"),
-                () -> assertContains(output, "类型: TASK_DRAFT"),
-                () -> assertContains(output, "状态: CONFIRMABLE"),
+                () -> assertContains(output, "类型: 任务草稿"),
+                () -> assertContains(output, "状态: 待确认"),
                 () -> assertContains(output, "标题: 任务草稿"),
-                () -> assertContains(output, "优先级: MEDIUM"),
+                () -> assertContains(output, "优先级: 中"),
                 () -> assertContains(output, "截止日期: 2026-01-20"),
                 () -> assertContains(output, "描述: description"),
                 () -> assertContains(output, "学习计划草稿: 无"));
@@ -1591,7 +1670,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> verify(draftLifecycleService).confirmDraft(new EntityId(1)),
                 () -> assertContains(output, "AI 草稿详情"),
-                () -> assertContains(output, "状态: IMPORTED"));
+                () -> assertContains(output, "状态: 已导入"));
     }
 
     @Test
@@ -1607,7 +1686,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> verify(draftLifecycleService).cancelDraft(new EntityId(1)),
                 () -> assertContains(output, "AI 草稿详情"),
-                () -> assertContains(output, "状态: CANCELLED"));
+                () -> assertContains(output, "状态: 已取消"));
     }
 
     @Test
@@ -1641,7 +1720,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "失败: VALIDATION_ERROR - import failed"),
                 () -> assertNotContains(output, "AI 草稿详情"),
-                () -> assertNotContains(output, "状态: CONFIRMABLE"));
+                () -> assertNotContains(output, "状态: 待确认"));
     }
 
     @Test
@@ -1653,7 +1732,7 @@ class ConsoleApplicationTest {
         assertAll(
                 () -> assertContains(output, "AI 草稿详情"),
                 () -> assertContains(output, "AI 草稿列表"),
-                () -> assertContains(output, "1 | TASK_DRAFT | CONFIRMABLE | 任务 1 | 学习计划 false"),
+                () -> assertContains(output, "1 | 任务草稿 | 待确认 | 任务 1 | 学习计划 false"),
                 () -> assertContains(output, "标题: 整理任务"),
                 () -> assertContains(output, "截止日期: 2026-01-20"));
     }
@@ -1703,7 +1782,7 @@ class ConsoleApplicationTest {
                 () -> assertContains(output, "失败: STATE_CONFLICT - suggestion draft is not confirmable"),
                 () -> assertContains(taskList, "确认任务"),
                 () -> assertNotContains(taskList, "取消任务"),
-                () -> assertContains(output, "状态: CANCELLED"));
+                () -> assertContains(output, "状态: 已取消"));
     }
 
     @Test
