@@ -2,6 +2,7 @@ package assistant.docs;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,9 +22,153 @@ import org.junit.jupiter.api.Test;
 
 class DocumentationDeliveryTest {
     private static final Path DOCS = Path.of("docs");
+    private static final Path LAB_GUIDE = Path.of("..", "软件质量保证与测试实验指导书.md");
     private static final Path TEST_SOURCES = Path.of("src/test/java");
     private static final Pattern TEST_METHOD_PATTERN = Pattern.compile(
             "@Test\\s+(?:void\\s+)?([A-Za-z_$][A-Za-z\\d_$]*)\\s*\\(");
+    private static final Pattern SCORE_ROW_PATTERN = Pattern.compile("\\| [^|]+ \\| (\\d+) \\| [^|]+ \\| [^|]+ \\|");
+
+    @Test
+    void labGuideDocumentsRequiredCourseStructureAndProjectScope() {
+        String guide = read(LAB_GUIDE);
+
+        assertAll(
+                () -> assertContainsAll(guide, List.of(
+                        "课程编号：A0801050230",
+                        "# 软件质量保证与测试",
+                        "# java-ai-assistant 实验指导书",
+                        "东北大学软件学院")),
+                () -> assertContainsAll(guide, List.of(
+                        "## 一、实验基本信息",
+                        "## 二、实验目的",
+                        "## 三、实验环境",
+                        "## 四、项目简介与被测对象",
+                        "## 五、被测范围与不测范围",
+                        "## 六、质量目标与质量属性",
+                        "## 七、测试策略",
+                        "## 八、测试计划",
+                        "## 九、测试用例设计方法",
+                        "## 十、单元测试实验",
+                        "## 十一、集成测试实验",
+                        "## 十二、系统测试与验收测试实验",
+                        "## 十三、自动化测试与 CI 实验",
+                        "## 十四、缺陷记录与分析",
+                        "## 十五、质量度量",
+                        "## 十六、实验报告提交要求",
+                        "## 十七、评分标准",
+                        "## 附录 A：推荐命令",
+                        "## 附录 B：关键目录结构",
+                        "## 附录 C：关键测试类索引",
+                        "## 附录 D：参考文档清单")),
+                () -> assertContainsAll(guide, List.of(
+                        "`/root/exp_SWAT/java-ai-assistant`",
+                        "Java 17",
+                        "Maven 单模块",
+                        "控制台个人学习生活助手",
+                        "`assistant.app.Main`",
+                        "默认测试不访问真实 DeepSeek、真实网络、真实 API Key、用户文件或真实当前时间",
+                        "内存仓储",
+                        "不包含数据库、文件导出、系统通知、账号、多用户、图形界面或后台提醒服务")));
+    }
+
+    @Test
+    void labGuideMapsRealModulesCommandsCiAndIntegrationBoundaries() {
+        String guide = read(LAB_GUIDE);
+
+        assertAll(
+                () -> assertContainsAll(guide, List.of(
+                        "`AiAssistantService`", "`PromptBuilder`", "`DeepSeekAiClient`",
+                        "`AiConfigurationLoader`", "`StructuredSuggestionParser`",
+                        "`DraftLifecycleService`", "`DraftImportService`",
+                        "`Main`", "`ApplicationFactory`", "`ConsoleApplication`", "`DemoDataFactory`",
+                        "`TaskService`", "`TaskItem`", "`TaskQuery`", "`TaskStatus`", "`TaskPriority`",
+                        "`ScheduleService`", "`ScheduleItem`", "`ScheduleConflictPolicy`",
+                        "`ScheduleStatus`", "`ScheduleQuery`",
+                        "`StudyPlanService`", "`StudyPlan`", "`StudyPlanAnalysisService`",
+                        "`StudyPlanStatus`", "`StudyPlanQuery`",
+                        "`FinanceService`", "`FinanceStatisticsService`", "`TransactionRecord`",
+                        "`TransactionQuery`", "`TransactionType`",
+                        "`NoteService`", "`Note`", "`NoteQuery`", "`NoteSearchPolicy`",
+                        "`SummaryService`", "`DashboardSummary`", "`LocalContext`",
+                        "`TimeProvider`", "`FixedTimeProvider`", "`IdGenerator`", "`IncrementalIdGenerator`")),
+                () -> assertContainsAll(guide, List.of(
+                        "mvn clean test",
+                        "mvn clean verify",
+                        "mvn jacoco:report",
+                        "mvn -Pintegration verify",
+                        "mvn -q -DskipTests dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+                        "mvn -q -DskipTests compile",
+                        "java -cp \"target/classes:$(cat target/classpath.txt)\" assistant.app.Main",
+                        "printf 'q\\n' | java -cp \"target/classes:$(cat target/classpath.txt)\" assistant.app.Main")),
+                () -> assertContainsAll(guide, List.of(
+                        "`push`",
+                        "`pull_request`",
+                        "`java-ai-assistant`",
+                        "mvn -B -DskipTests package",
+                        "mvn -B test")),
+                () -> assertContainsAll(guide, List.of(
+                        "当前仓库没有 `*IT.java` 文件",
+                        "Failsafe 输出 `No tests to run`",
+                        "不等价于真实 DeepSeek 连通性已验证",
+                        "未来可新增 `*IT.java`",
+                        "`DEEPSEEK_API_KEY`")));
+    }
+
+    @Test
+    void labGuideDocumentsHistoricalAcceptanceAsEvidenceAndRequiresCurrentExecutionResults() {
+        String guide = read(LAB_GUIDE);
+
+        assertAll(
+                () -> assertContainsAll(guide, List.of(
+                        "/root/exp_SWAT/acceptance/20260613_full_acceptance.md",
+                        "2026-06-13 验收记录",
+                        "`mvn clean test` 952 个测试通过",
+                        "`mvn clean verify` 通过",
+                        "`mvn -Pintegration verify` 通过但无集成测试可运行",
+                        "JaCoCo 指令覆盖 96.78%",
+                        "分支覆盖 86.65%",
+                        "行覆盖 94.55%")),
+                () -> assertContainsAll(guide, List.of(
+                        "课程复核时必须以当前执行输出为准",
+                        "不得伪造新的执行结果",
+                        "测试数量、失败数、覆盖率和 CI 状态必须来自当前真实执行输出",
+                        "明确标注为“来自 2026-06-13 验收记录”")));
+    }
+
+    @Test
+    void labGuideDefinesDefectMetricsReportRequirementsAndOneHundredPointRubric() {
+        String guide = read(LAB_GUIDE);
+
+        assertAll(
+                () -> assertContainsAll(guide, List.of(
+                        "缺陷编号",
+                        "严重级别",
+                        "复现步骤",
+                        "预期结果",
+                        "实际结果",
+                        "根因分析",
+                        "修复措施",
+                        "回归测试",
+                        "阻塞",
+                        "严重",
+                        "一般",
+                        "轻微")),
+                () -> assertContainsAll(guide, List.of(
+                        "测试通过率",
+                        "模块用例覆盖范围",
+                        "覆盖率",
+                        "缺陷分布",
+                        "自动化执行结果",
+                        "风险残留")),
+                () -> assertContainsAll(guide, List.of(
+                        "/root/exp_SWAT/实验说明.md",
+                        "/root/exp_SWAT/实验报告模板.md",
+                        "实验报告",
+                        "答辩视频",
+                        "待测程序源代码",
+                        "单元测试脚本")),
+                () -> assertEquals(100, scoreTotal(guide)));
+    }
 
     @Test
     void testPlanDocumentsRequiredScopeToolsCommandsAndBoundaries() {
@@ -55,7 +200,8 @@ class DocumentationDeliveryTest {
                         "mvn clean verify",
                         "mvn jacoco:report",
                         "mvn -Pintegration verify",
-                        "通过 944 个测试，失败 0 个",
+                        "具体测试数量以当前 Maven/Surefire 输出为准",
+                        "2026-06-13 执行 `mvn clean test` 时 952 个测试通过、失败 0 个",
                         "不存在 `*IT.java`",
                         "普通单元测试不得访问真实 DeepSeek、网络、API Key、用户文件或真实当前时间")));
     }
@@ -82,7 +228,8 @@ class DocumentationDeliveryTest {
                         "FINANCE-01",
                         "NOTE-01",
                         "SUMMARY-01",
-                        "通过 944 个测试，失败 0 个")),
+                        "执行结果数量以当前 Maven/Surefire 输出为准",
+                        "2026-06-13 执行 `mvn clean test` 时 952 个测试通过、失败 0 个")),
                 () -> assertContainsAll(cases, List.of(
                         "AI 任务草稿确认导入到任务服务",
                         "AI 学习计划草稿确认导入到学习计划服务",
@@ -348,6 +495,21 @@ class DocumentationDeliveryTest {
             throw new AssertionError("Unable to scan test sources", exception);
         }
         return methodsByClass;
+    }
+
+    private static int scoreTotal(String guide) {
+        int rubricStart = guide.indexOf("## 十七、评分标准");
+        int appendixStart = guide.indexOf("## 附录 A：推荐命令");
+        assertTrue(rubricStart >= 0, "Missing rubric section");
+        assertTrue(appendixStart > rubricStart, "Missing appendix after rubric");
+
+        String rubric = guide.substring(rubricStart, appendixStart);
+        int total = 0;
+        Matcher matcher = SCORE_ROW_PATTERN.matcher(rubric);
+        while (matcher.find()) {
+            total += Integer.parseInt(matcher.group(1));
+        }
+        return total;
     }
 
     private static Set<String> testMethodNames(Path testSource) {

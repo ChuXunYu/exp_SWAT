@@ -92,7 +92,7 @@ mvn jacoco:report
 mvn -Pintegration verify
 ```
 
-最近验证记录来自 v28 验证报告：`mvn clean test` 通过 944 个测试，失败 0 个。本轮文档不伪造新的执行时间、覆盖率百分比或集成测试通过结果。
+具体测试数量以当前 Maven/Surefire 输出为准。本轮文档不伪造新的执行时间、覆盖率百分比或集成测试通过结果；`/root/exp_SWAT/acceptance/20260613_full_acceptance.md` 记录 2026-06-13 执行 `mvn clean test` 时 952 个测试通过、失败 0 个。
 
 ## 集成测试边界
 
