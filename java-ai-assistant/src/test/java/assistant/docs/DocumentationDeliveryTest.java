@@ -145,6 +145,10 @@ class DocumentationDeliveryTest {
 
         assertAll(
                 () -> assertContainsAll(readme, List.of(
+                        "## Project Overview",
+                        "## Features",
+                        "## Requirements",
+                        "## Build",
                         "## Unit Tests",
                         "mvn clean test",
                         "passed 944 tests with 0 failures",
@@ -152,7 +156,13 @@ class DocumentationDeliveryTest {
                         "mvn -Pintegration verify",
                         "does not contain `*IT.java` classes",
                         "does not mean that a real DeepSeek connectivity test already exists",
-                        "DEEPSEEK_API_KEY")),
+                        "DEEPSEEK_API_KEY",
+                        "## Run",
+                        "## Configuration",
+                        "## Common Workflows",
+                        "## Known Limitations",
+                        "assistant.app.Main",
+                        "ASSISTANT_DEMO_DATA")),
                 () -> assertContainsAll(readme, List.of(
                         "## Test Documentation",
                         "[Test plan](docs/test-plan.md)",
@@ -165,6 +175,71 @@ class DocumentationDeliveryTest {
                         "mvn clean verify",
                         "mvn jacoco:report",
                         "target/site/jacoco/index.html")));
+    }
+
+    @Test
+    void readmeDocumentsRunnableEntryPointCommandsWithoutUnsupportedCliOrJarClaims() {
+        String readme = read(Path.of("README.md"));
+
+        assertAll(
+                () -> assertContainsAll(readme, List.of(
+                        "mvn -q -DskipTests dependency:build-classpath -Dmdep.outputFile=target/classpath.txt",
+                        "mvn -q -DskipTests compile",
+                        "java -cp \"target/classes:$(cat target/classpath.txt)\" assistant.app.Main",
+                        "printf 'q\\n' | java -cp \"target/classes:$(cat target/classpath.txt)\" assistant.app.Main",
+                        "ASSISTANT_DEMO_DATA=false java -cp \"target/classes:$(cat target/classpath.txt)\" assistant.app.Main",
+                        "java -DASSISTANT_DEMO_DATA=false -cp \"target/classes:$(cat target/classpath.txt)\" assistant.app.Main")),
+                () -> assertFalse(readme.contains("--demo-data"), "README must not document unsupported demo-data CLI flags"),
+                () -> assertFalse(readme.contains("--api-key"), "README must not document unsupported API key CLI flags"),
+                () -> assertFalse(readme.contains("--model"), "README must not document unsupported model CLI flags"),
+                () -> assertFalse(readme.contains("--help"), "README must not document unsupported help CLI flags"),
+                () -> assertFalse(readme.contains("Main-Class"), "README must not claim a configured executable jar"));
+    }
+
+    @Test
+    void readmeDocumentsAiAndDemoDataConfigurationContracts() {
+        String readme = read(Path.of("README.md"));
+
+        assertAll(
+                () -> assertContainsAll(readme, List.of(
+                        "`DEEPSEEK_API_KEY`",
+                        "`DEEPSEEK_BASE_URL`",
+                        "`https://api.deepseek.com`",
+                        "`DEEPSEEK_MODEL`",
+                        "`deepseek-v4-flash`",
+                        "`DEEPSEEK_TIMEOUT_SECONDS`",
+                        "`/chat/completions`",
+                        "`ASSISTANT_DEMO_DATA`",
+                        "`false`, `0`, or `no` disables demo data")),
+                () -> assertContainsAll(readme, List.of(
+                        "when no API key is configured, it returns an unconfigured error instead of calling the real service",
+                        "The default test lifecycle is isolated from real DeepSeek calls",
+                        "Do not commit API keys to source code, tests, or documentation examples")));
+    }
+
+    @Test
+    void readmeDocumentsCurrentFeatureSurfaceAndKnownLimitationsOnly() {
+        String readme = read(Path.of("README.md"));
+        String lowerCaseReadme = readme.toLowerCase();
+
+        assertAll(
+                () -> assertContainsAll(readme, List.of(
+                        "Summary: shows today's tasks, today's schedules, this week's study plans",
+                        "Tasks: list, add, view, filter, update, complete, reopen, and delete tasks.",
+                        "Schedules: list, add, view, filter, update, and delete schedule items",
+                        "Study plans: list, add, view, filter, update, update progress, and delete plans.",
+                        "Finance: list, add, view, filter, update, delete, and calculate transaction statistics.",
+                        "Notes: list, add, view, filter, update, and delete notes.",
+                        "AI drafts: view, confirm, or cancel structured suggestion drafts",
+                        "The main menu contains summary, tasks, schedules, study plans, finance, notes, AI Q&A, AI drafts, help, and exit.")),
+                () -> assertContainsAll(readme, List.of(
+                        "single-user console application",
+                        "stored in memory and is not persisted after the process exits",
+                        "There is no database, file export, real system notification, or background reminder service.",
+                        "This README does not claim a concrete coverage percentage.")),
+                () -> assertFalse(lowerCaseReadme.contains("account"), "README must not claim account management"),
+                () -> assertFalse(lowerCaseReadme.contains("contact"), "README must not claim contact management"),
+                () -> assertFalse(lowerCaseReadme.contains("health"), "README must not claim health management"));
     }
 
     @Test
