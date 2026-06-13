@@ -62,6 +62,6 @@ Ordinary unit tests use fixed time, in-memory repositories, and mock or fake AI 
 
 ## Current Test Baseline
 
-The v28 validation report records `mvn clean test` passing 944 tests with 0 failures.
+The QA risk-fix v4 validation report records `mvn clean verify` passing 989 tests with 0 failures, 0 errors, and 0 skipped tests.
 
 The current `src/test/java` tree does not contain `*IT.java` integration test classes. Real DeepSeek connectivity is not part of the default unit-test baseline.

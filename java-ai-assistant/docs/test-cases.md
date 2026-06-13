@@ -146,4 +146,4 @@
 
 ## 执行结果摘要
 
-执行结果数量以当前 Maven/Surefire 输出为准。`/root/exp_SWAT/acceptance/20260613_full_acceptance.md` 记录 2026-06-13 执行 `mvn clean test` 时 952 个测试通过、失败 0 个。以上实际结果列统一记录为“通过”。未执行也未记录真实 DeepSeek 网络集成测试结果。
+执行结果数量以当前 Maven/Surefire 输出为准。`/root/exp_SWAT/implements/202606131017_qa-risk-fixes/verify_v4.md` 记录 QA 风险修复 v4 执行 `mvn clean verify` 时 989 个测试通过、失败 0 个、错误 0 个、跳过 0 个。以上实际结果列统一记录为“通过”。未执行也未记录真实 DeepSeek 网络集成测试结果。

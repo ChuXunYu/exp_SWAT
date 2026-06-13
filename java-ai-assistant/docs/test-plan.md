@@ -93,7 +93,7 @@ mvn jacoco:report
 mvn -Pintegration verify
 ```
 
-具体测试数量以当前 Maven/Surefire 输出为准。本轮文档不伪造新的执行时间、覆盖率百分比或集成测试通过结果；`/root/exp_SWAT/acceptance/20260613_full_acceptance.md` 记录 2026-06-13 执行 `mvn clean test` 时 952 个测试通过、失败 0 个。
+具体测试数量以当前 Maven/Surefire 输出为准。本轮文档不伪造新的执行时间、覆盖率百分比或集成测试通过结果；`/root/exp_SWAT/implements/202606131017_qa-risk-fixes/verify_v4.md` 记录 QA 风险修复 v4 执行 `mvn clean verify` 时 989 个测试通过、失败 0 个、错误 0 个、跳过 0 个。
 
 ## 集成测试边界
 

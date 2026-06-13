@@ -2,7 +2,7 @@
 
 ## 记录口径
 
-本记录来自开发迭代中的可测缺陷和 JUnit 回归结果归纳，最终以 v28 `mvn clean test` 通过 944 个测试、失败 0 个为回归基准。普通回归测试使用固定时间、内存仓储和 fake/mock AI 依赖，不访问真实 DeepSeek、真实网络、真实 API Key、真实用户文件或真实当前时间。
+本记录来自开发迭代和 QA 风险修复中的可测缺陷与 JUnit 回归结果归纳，最终以 QA 风险修复 v4 `mvn clean verify` 通过 989 个测试、失败 0 个、错误 0 个、跳过 0 个为回归基准。普通回归测试使用固定时间、内存仓储和 fake/mock AI 依赖，不访问真实 DeepSeek、真实网络、真实 API Key、真实用户文件或真实当前时间。
 
 ## 缺陷记录
 
@@ -18,6 +18,11 @@
 | BUG-08 | 日程首尾相接被误判为冲突 | 一个日程结束时间等于另一个开始时间 | 允许创建或更新 | 修复前重叠判定边界不清 | 时间区间闭开边界处理错误 | 冲突策略采用结束点不包含的区间语义 | SCHEDULE-04；`ScheduleServiceTest.createScheduleAllowsTouchingTimeRanges`, `ScheduleServiceTest.updateScheduleAllowsTouchingOtherScheduleTimeRange` | `assistant.schedule` 单元测试，全量 `mvn clean test` | 已修复 |
 | BUG-09 | 收支删除后统计可能未重新反映当前数据 | 删除一笔收入或支出后再查看统计 | 统计基于删除后的交易集合 | 修复前统计入口可能依赖旧集合 | 查询和统计链路同步不足 | 删除后通过服务重新查询并计算统计 | FINANCE-07；`ConsoleApplicationTest.financeMenuDeleteRecomputesStatistics` | `assistant.finance`, `assistant.app` 单元测试，全量 `mvn clean test` | 已修复 |
 | BUG-10 | 摘要依赖失败时错误消息不稳定 | 任一依赖服务返回失败且消息为空 | 返回稳定失败消息 | 修复前可能暴露空消息 | 依赖错误传播缺少消息兜底 | `SummaryService` 使用稳定错误消息 | SUMMARY-06；`SummaryServiceTest.getDashboardSummaryPropagatesFirstDependencyFailure`, `SummaryServiceTest.getDashboardSummaryUsesStableFallbackWhenDependencyFailureMessageIsBlank` | `assistant.summary` 单元测试，全量 `mvn clean test` | 已修复 |
+| BUG-11 | AI 结构化建议缺少端到端生成入口 | 用户希望从 AI 生成任务或学习计划草稿 | 调用 AI、解析结构化响应、保存草稿并可确认导入 | 早期版本只能管理已有草稿 | 应用层编排和 CLI 入口缺失 | 新增 `StructuredSuggestionDraftService` 并接入 AI 草稿菜单 | DRAFT-02, CONSOLE 草稿生成；`StructuredSuggestionDraftServiceTest`, `ConsoleApplicationTest` | `assistant.ai`, `assistant.app` 单元测试，全量 `mvn clean verify` | 已修复 |
+| BUG-12 | 学习计划草稿 breakdown 导入后丢失 | 学习计划草稿包含 breakdown | 确认导入后拆解步骤落地到正式数据 | 早期版本只创建学习计划，breakdown 被忽略 | 草稿导入映射不完整 | `DraftImportService` 将 breakdown 转为 TODO 任务并补偿失败 | DRAFT-09；`DraftImportServiceTest.importStudyPlanDraftCreatesTasksForBreakdownItems` | `assistant.ai`, `assistant.task`, `assistant.study` 单元测试，全量 `mvn clean verify` | 已修复 |
+| BUG-13 | 新生成任务草稿可能缺少 dueDate 导致无法确认 | AI 返回任务草稿缺少 dueDate | 保存前拒绝不可导入草稿 | 早期模型允许展示缺失 dueDate | 生成保存规则与导入规则不一致 | 结构化草稿生成服务保存前校验任务 dueDate | DRAFT-03；`StructuredSuggestionDraftServiceTest.generateTaskDraftRejectsMissingDueDateBeforeSave` | `assistant.ai` 单元测试，全量 `mvn clean verify` | 已修复 |
+| BUG-14 | 摘要页缺少逾期与未来高优先级任务 | 任务逾期未完成或未来 7 天 HIGH 未完成 | 摘要和 AI 本地上下文突出紧急任务 | 早期只统计今日任务 | 汇总任务视图过窄 | `DashboardSummary`, `SummaryService`, `LocalContext`, `PromptBuilder`, `ConsoleApplication` 增加紧急任务视图 | SUMMARY-07；`SummaryServiceTest`, `LocalContextTest`, `PromptBuilderTest`, `ConsoleApplicationTest` | `assistant.summary`, `assistant.ai`, `assistant.app` 单元测试，全量 `mvn clean verify` | 已修复 |
+| BUG-15 | 中文控制台暴露英文枚举 | 用户输入或查看任务优先级、状态、收支类型等枚举 | 支持中文输入并优先中文展示，英文继续兼容 | 早期提示和输出包含内部英文枚举 | 控制台层缺少中文解析和展示映射 | `ConsoleApplication` 集中增加中文枚举 parse/display helper | CONSOLE-01 至 CONSOLE-08；`ConsoleApplicationTest` | `assistant.app` 单元测试，全量 `mvn clean verify` | 已修复 |
 
 ## 核心回归测试集
 
@@ -25,14 +30,14 @@
 - 日程状态：创建、非法时间范围、冲突、首尾相接、按日期查询、即将开始、进行中和已过期。
 - 学习计划进度：进度 0、100、-1、101，未开始、进行中、完成、逾期和统计。
 - 收支统计：收入、支出、金额边界、类别和日期过滤、空集合统计、多笔统计、删除后统计。
-- 汇总：空数据、单模块数据、多模块组合、本周学习、本月收支、笔记标签分布。
+- 汇总：空数据、单模块数据、多模块组合、本周学习、本月收支、笔记标签分布、逾期未完成任务、未来 7 天高优先级任务。
 - AI 失败降级：未配置、空响应、格式异常、HTTP 401/429/5xx、超时和网络异常。
-- AI 草稿确认/取消：任务草稿、学习计划草稿、字段缺失、确认导入、取消不写入、重复确认冲突、导入失败回滚。
-- 控制台交互：非法 id、非法日期、非法枚举、循环子菜单、帮助、返回、EOF、列表不截断。
+- AI 草稿生成/确认/取消：任务草稿、学习计划草稿、字段缺失、dueDate 缺失拒绝保存、breakdown 落地、确认导入、取消不写入、重复确认冲突、导入失败回滚。
+- 控制台交互：非法 id、非法日期、非法枚举、中文枚举别名、英文枚举兼容、循环子菜单、帮助、返回、EOF、列表不截断。
 
 ## 回归执行结论
 
-v28 验证报告记录默认单元测试 `mvn clean test` 通过 944 个测试，失败 0 个。真实 DeepSeek 集成测试未作为默认回归执行，当前回归结论仅覆盖隔离的 JUnit 单元测试和控制台交互单元测试。
+QA 风险修复 v4 验证报告记录默认验证命令 `mvn clean verify` 通过 989 个测试，失败 0 个，错误 0 个，跳过 0 个。真实 DeepSeek 集成测试未作为默认回归执行，当前回归结论仅覆盖隔离的 JUnit 单元测试和控制台交互单元测试。
 
 ## 残余风险
 

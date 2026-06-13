@@ -8,14 +8,14 @@ The current application stores business data through in-memory services and repo
 
 ## Features
 
-- Summary: shows today's tasks, today's schedules, this week's study plans, this month's income, expense, and balance, plus note and tag statistics.
+- Summary: shows today's tasks, overdue incomplete tasks, upcoming high-priority tasks in the next 7 days, today's schedules, this week's study plans, this month's income, expense, and balance, plus note and tag statistics.
 - Tasks: list, add, view, filter, update, complete, reopen, and delete tasks.
 - Schedules: list, add, view, filter, update, and delete schedule items, with filters that can use schedule status and time-derived state.
 - Study plans: list, add, view, filter, update, update progress, and delete plans.
 - Finance: list, add, view, filter, update, delete, and calculate transaction statistics.
 - Notes: list, add, view, filter, update, and delete notes.
 - AI Q&A: calls the DeepSeek client with local summary context; when no API key is configured, it returns an unconfigured error instead of calling the real service.
-- AI drafts: view, confirm, or cancel structured suggestion drafts, with import support for tasks and study plans.
+- AI drafts: generate, view, confirm, or cancel structured suggestion drafts, with import support for tasks and study plans.
 
 The main menu contains summary, tasks, schedules, study plans, finance, notes, AI Q&A, AI drafts, help, and exit.
 
@@ -51,7 +51,7 @@ Run unit tests from this directory:
 mvn clean test
 ```
 
-Recent validation record from v28: `mvn clean test` passed 944 tests with 0 failures.
+Recent QA risk-fix validation record: `mvn clean verify` passed 989 tests with 0 failures, 0 errors, and 0 skipped tests.
 
 ## Integration Tests
 

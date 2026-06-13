@@ -129,7 +129,12 @@ class DocumentationDeliveryTest {
                         "`mvn -Pintegration verify` 通过但无集成测试可运行",
                         "JaCoCo 指令覆盖 96.78%",
                         "分支覆盖 86.65%",
-                        "行覆盖 94.55%")),
+                        "行覆盖 94.55%",
+                        "/root/exp_SWAT/implements/202606131017_qa-risk-fixes/verify_v4.md",
+                        "`mvn clean verify` 通过，989 个测试通过、失败 0、错误 0、跳过 0",
+                        "指令覆盖 96.79%",
+                        "分支覆盖 86.61%",
+                        "行覆盖 94.48%")),
                 () -> assertContainsAll(guide, List.of(
                         "课程复核时必须以当前执行输出为准",
                         "不得伪造新的执行结果",
@@ -203,7 +208,7 @@ class DocumentationDeliveryTest {
                         "mvn jacoco:report",
                         "mvn -Pintegration verify",
                         "具体测试数量以当前 Maven/Surefire 输出为准",
-                        "2026-06-13 执行 `mvn clean test` 时 952 个测试通过、失败 0 个",
+                        "QA 风险修复 v4 执行 `mvn clean verify` 时 989 个测试通过、失败 0 个、错误 0 个、跳过 0 个",
                         "不存在 `*IT.java`",
                         "普通单元测试不得访问真实 DeepSeek、网络、API Key、用户文件或真实当前时间")));
     }
@@ -231,7 +236,7 @@ class DocumentationDeliveryTest {
                         "NOTE-01",
                         "SUMMARY-01",
                         "执行结果数量以当前 Maven/Surefire 输出为准",
-                        "2026-06-13 执行 `mvn clean test` 时 952 个测试通过、失败 0 个")),
+                        "QA 风险修复 v4 执行 `mvn clean verify` 时 989 个测试通过、失败 0 个、错误 0 个、跳过 0 个")),
                 () -> assertContainsAll(cases, List.of(
                         "AI 任务草稿确认导入到任务服务",
                         "AI 学习计划草稿确认导入到学习计划服务",
@@ -258,7 +263,9 @@ class DocumentationDeliveryTest {
                         "BUG-01",
                         "BUG-05",
                         "BUG-10",
-                        "通过 944 个测试，失败 0 个",
+                        "通过 989 个测试、失败 0 个、错误 0 个、跳过 0 个",
+                        "BUG-11",
+                        "BUG-15",
                         "真实 DeepSeek 集成测试未作为默认回归执行",
                         "当前 `src/test/java` 下没有 `*IT.java` 集成测试类",
                         "不伪造覆盖率数字")));
@@ -300,7 +307,7 @@ class DocumentationDeliveryTest {
                         "## Build",
                         "## Unit Tests",
                         "mvn clean test",
-                        "passed 944 tests with 0 failures",
+                        "passed 989 tests with 0 failures",
                         "## Integration Tests",
                         "mvn -Pintegration verify",
                         "does not contain `*IT.java` classes",
@@ -373,13 +380,13 @@ class DocumentationDeliveryTest {
 
         assertAll(
                 () -> assertContainsAll(readme, List.of(
-                        "Summary: shows today's tasks, today's schedules, this week's study plans",
+                        "Summary: shows today's tasks, overdue incomplete tasks, upcoming high-priority tasks in the next 7 days",
                         "Tasks: list, add, view, filter, update, complete, reopen, and delete tasks.",
                         "Schedules: list, add, view, filter, update, and delete schedule items",
                         "Study plans: list, add, view, filter, update, update progress, and delete plans.",
                         "Finance: list, add, view, filter, update, delete, and calculate transaction statistics.",
                         "Notes: list, add, view, filter, update, and delete notes.",
-                        "AI drafts: view, confirm, or cancel structured suggestion drafts",
+                        "AI drafts: generate, view, confirm, or cancel structured suggestion drafts",
                         "The main menu contains summary, tasks, schedules, study plans, finance, notes, AI Q&A, AI drafts, help, and exit.")),
                 () -> assertContainsAll(readme, List.of(
                         "single-user console application",
@@ -418,7 +425,7 @@ class DocumentationDeliveryTest {
                         "[White-box test cases](test-cases.md)",
                         "[Defect and regression record](defect-regression.md)",
                         "[Coverage evidence notes](coverage/README.md)",
-                        "passing 944 tests with 0 failures",
+                        "passing 989 tests with 0 failures",
                         "does not contain `*IT.java` integration test classes")));
     }
 
