@@ -363,3 +363,13 @@
 任务：新增并完善实验 1 测试交付文档，预期文件路径包括 `java-ai-assistant/docs/test-plan.md`、`java-ai-assistant/docs/test-cases.md`、`java-ai-assistant/docs/defect-regression.md`、`java-ai-assistant/docs/coverage/README.md`，并必要时更新 `java-ai-assistant/README.md` 与 `java-ai-assistant/docs/environment.md` 中的测试运行和覆盖率生成说明。
 选择理由：源码、单元测试、Maven 构建、AI 配置说明和 8 个核心功能控制台入口已经基本完成，但完整需求明确要求实验 1 交付测试计划、白盒测试用例、覆盖证据、缺陷修复与回归测试记录、结果分析和必要的组件/集成测试边界说明。当前工程只存在 `README.md` 与 `docs/environment.md`，尚缺少技术方案目录中列出的测试计划、测试用例、缺陷回归和覆盖证据文档。下一步应补齐这些课程验收材料，使已有 944 个 JUnit 单元测试和 JaCoCo 配置能被教师或答辩材料直接追溯。
 上下文：项目已包含 `pom.xml` 中的 JUnit Jupiter、Mockito、Surefire/Failsafe 与 JaCoCo 配置，普通单元测试已覆盖 `assistant.common`、`task`、`schedule`、`study`、`finance`、`note`、`summary`、`ai` 和 `app` 包，并在 v28 验证报告中记录 `mvn clean test` 通过 944 个测试。需求要求测试计划说明测试目标、范围、环境、工具、分层和策略；测试用例应覆盖 8 个核心功能的成功路径、异常输入、边界条件、状态迁移、统计计算、跨模块组合和 AI 外部依赖失败处理；覆盖证据至少应选择 2 到 3 个复杂核心方法给出控制流/独立路径/用例映射，并说明 JaCoCo 报告生成方式；缺陷回归文档应记录本轮开发中已通过审议修订暴露并修复的代表性缺陷或可测性问题，例如任务服务只读快照、学习计划状态统计口径、AI HTTP 错误映射、草稿导入回滚和控制台草稿列表不截断等。文档不得声称普通单元测试访问真实 DeepSeek、真实网络、真实 API Key、真实用户文件或真实当前时间；真实 DeepSeek 连通性只能作为可选 `integration` profile 边界说明。
+
+---
+
+## R30 PASSED 补齐实验 1 测试文档与覆盖证据说明
+结果：新增并完善测试计划、白盒测试用例、缺陷修复与回归测试记录、覆盖证据说明，并更新 README 与环境说明；同步加入文档交付测试，验证测试文档索引、覆盖率命令、集成测试边界、文档引用测试资产真实性和当前无 *IT.java 的项目事实。
+测试：`mvn test` 通过；验证报告记录通过 952 个测试，失败 0 个；最新提交为 `f64e8f6 v29 done`。
+
+## R30 PASSED 全部实现任务完成
+结果：已完成 Java AI 个人学习与生活助手完整开发，覆盖 DeepSeek Flash AI 问答、AI 结构化建议草稿确认导入、任务待办、日程提醒、学习计划、收支记录、个人笔记、数据查询与汇总统计 8 个核心功能；已具备 Maven 构建、命令行入口、可控装配、单元测试、测试交付文档、覆盖证据说明和回归记录。
+测试：最新验证报告 `verify_v29.md` 记录 `mvn test` 通过 952 个测试，失败 0 个。
