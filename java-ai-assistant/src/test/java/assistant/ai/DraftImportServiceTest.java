@@ -216,6 +216,7 @@ class DraftImportServiceTest {
         StudyPlanService studyPlanService = studyPlanService(studyPlanRepository);
         DraftImportService importService = new DraftImportService(taskService, studyPlanService);
         taskService.createTask("Existing", "baseline", TaskPriority.LOW, JUNE_12);
+        StudyPlanView existingPlan = createExistingStudyPlan(studyPlanService);
         taskRepository.failOnSave(2, new IllegalArgumentException("planned breakdown task creation failure"));
         SuggestionDraft draft = SuggestionDraft.forStudyPlan(
                 new EntityId(1), studyPlanWithBreakdown(List.of("Syntax", "Testing")));
@@ -223,11 +224,15 @@ class DraftImportServiceTest {
         OperationResult<Void> result = importService.importDraft(draft);
 
         List<TaskView> tasks = taskService.listTasks().getPayload();
+        List<StudyPlanView> studyPlans = studyPlanService.listStudyPlans().getPayload();
         assertAll(
                 () -> assertTrue(result.isFailure()),
                 () -> assertEquals(ErrorCode.VALIDATION_ERROR, result.getErrorCode()),
                 () -> assertEquals("planned breakdown task creation failure", result.getMessage()),
-                () -> assertTrue(studyPlanService.listStudyPlans().getPayload().isEmpty()),
+                () -> assertEquals(1, studyPlans.size()),
+                () -> assertEquals(existingPlan.id(), studyPlans.get(0).id()),
+                () -> assertEquals("Existing plan", studyPlans.get(0).goalName()),
+                () -> assertEquals(Progress.of(40), studyPlans.get(0).progress()),
                 () -> assertEquals(List.of("Existing"), tasks.stream().map(TaskView::title).toList()),
                 () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
     }
@@ -240,6 +245,7 @@ class DraftImportServiceTest {
         StudyPlanService studyPlanService = studyPlanService(studyPlanRepository);
         DraftImportService importService = new DraftImportService(taskService, studyPlanService);
         taskService.createTask("Existing", "baseline", TaskPriority.LOW, JUNE_12);
+        StudyPlanView existingPlan = createExistingStudyPlan(studyPlanService);
         taskRepository.failOnSave(2, new IllegalStateException("planned breakdown task repository failure"));
         SuggestionDraft draft = SuggestionDraft.forStudyPlan(
                 new EntityId(1), studyPlanWithBreakdown(List.of("Syntax", "Testing")));
@@ -247,11 +253,15 @@ class DraftImportServiceTest {
         OperationResult<Void> result = importService.importDraft(draft);
 
         List<TaskView> tasks = taskService.listTasks().getPayload();
+        List<StudyPlanView> studyPlans = studyPlanService.listStudyPlans().getPayload();
         assertAll(
                 () -> assertTrue(result.isFailure()),
                 () -> assertEquals(ErrorCode.SYSTEM_ERROR, result.getErrorCode()),
                 () -> assertEquals("failed to import suggestion draft", result.getMessage()),
-                () -> assertTrue(studyPlanService.listStudyPlans().getPayload().isEmpty()),
+                () -> assertEquals(1, studyPlans.size()),
+                () -> assertEquals(existingPlan.id(), studyPlans.get(0).id()),
+                () -> assertEquals("Existing plan", studyPlans.get(0).goalName()),
+                () -> assertEquals(Progress.of(40), studyPlans.get(0).progress()),
                 () -> assertEquals(List.of("Existing"), tasks.stream().map(TaskView::title).toList()),
                 () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
     }
@@ -310,6 +320,10 @@ class DraftImportServiceTest {
                 new IncrementalIdGenerator(200),
                 new FixedTimeProvider(NOW),
                 new StudyPlanAnalysisService());
+    }
+
+    private static StudyPlanView createExistingStudyPlan(StudyPlanService studyPlanService) {
+        return studyPlanService.createStudyPlan("Existing plan", JUNE_12, JUNE_20, 8, 40).getPayload();
     }
 
     private static void assertNullFieldRejected(String expectedMessage, Runnable action) {
