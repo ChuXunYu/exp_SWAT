@@ -21,6 +21,7 @@ import assistant.task.TaskPriority;
 import assistant.task.TaskQuery;
 import assistant.task.TaskRepository;
 import assistant.task.TaskService;
+import assistant.task.TaskStatus;
 import assistant.task.TaskView;
 import assistant.testability.FixedTimeProvider;
 import assistant.testability.IncrementalIdGenerator;
@@ -122,29 +123,80 @@ class DraftImportServiceTest {
     }
 
     @Test
-    void importsStudyPlanDraft() {
+    void importsStudyPlanDraftCreatesTasksForBreakdown() {
+        InMemoryTaskRepository taskRepository = new InMemoryTaskRepository();
+        TaskService taskService = new TaskService(taskRepository, new IncrementalIdGenerator(100));
         InMemoryStudyPlanRepository studyPlanRepository = new InMemoryStudyPlanRepository();
         StudyPlanService studyPlanService = studyPlanService(studyPlanRepository);
-        DraftImportService importService = new DraftImportService(taskService(), studyPlanService);
-        SuggestionDraft draft = SuggestionDraft.forStudyPlan(new EntityId(1), studyPlan());
+        DraftImportService importService = new DraftImportService(taskService, studyPlanService);
+        SuggestionDraft draft = SuggestionDraft.forStudyPlan(
+                new EntityId(1), studyPlanWithBreakdown(List.of("Syntax", "Testing")));
+
+        OperationResult<Void> result = importService.importDraft(draft);
+
+        List<TaskView> tasks = taskService.listTasks().getPayload();
+        assertAll(
+                () -> assertTrue(result.isSuccess()),
+                () -> assertEquals(1, studyPlanService.listStudyPlans().getPayload().size()),
+                () -> assertEquals("Learn Java", studyPlanService.listStudyPlans().getPayload().get(0).goalName()),
+                () -> assertEquals(20, studyPlanService.listStudyPlans().getPayload().get(0).progress().value()),
+                () -> assertEquals(List.of("Syntax", "Testing"), tasks.stream().map(TaskView::title).toList()),
+                () -> assertEquals(List.of("来自学习计划：Learn Java", "来自学习计划：Learn Java"),
+                        tasks.stream().map(TaskView::description).toList()),
+                () -> assertEquals(List.of(TaskPriority.MEDIUM, TaskPriority.MEDIUM),
+                        tasks.stream().map(TaskView::priority).toList()),
+                () -> assertEquals(List.of(JULY_31, JULY_31), tasks.stream().map(TaskView::dueDate).toList()),
+                () -> assertEquals(List.of(TaskStatus.TODO, TaskStatus.TODO),
+                        tasks.stream().map(TaskView::status).toList()),
+                () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
+    }
+
+    @Test
+    void importsStudyPlanDraftWithoutBreakdownCreatesOnlyStudyPlan() {
+        InMemoryTaskRepository taskRepository = new InMemoryTaskRepository();
+        TaskService taskService = new TaskService(taskRepository, new IncrementalIdGenerator(100));
+        InMemoryStudyPlanRepository studyPlanRepository = new InMemoryStudyPlanRepository();
+        StudyPlanService studyPlanService = studyPlanService(studyPlanRepository);
+        DraftImportService importService = new DraftImportService(taskService, studyPlanService);
+        SuggestionDraft draft = SuggestionDraft.forStudyPlan(new EntityId(1), studyPlanWithoutBreakdown());
 
         OperationResult<Void> result = importService.importDraft(draft);
 
         assertAll(
                 () -> assertTrue(result.isSuccess()),
                 () -> assertEquals(1, studyPlanService.listStudyPlans().getPayload().size()),
-                () -> assertEquals("Learn Java", studyPlanService.listStudyPlans().getPayload().get(0).goalName()),
-                () -> assertEquals(20, studyPlanService.listStudyPlans().getPayload().get(0).progress().value()),
+                () -> assertTrue(taskService.listTasks().getPayload().isEmpty()),
                 () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
     }
 
     @Test
-    void propagatesStudyPlanCreationFailure() {
+    void importsStudyPlanDraftIgnoresBlankBreakdownItemsCleanedByContent() {
+        InMemoryTaskRepository taskRepository = new InMemoryTaskRepository();
+        TaskService taskService = new TaskService(taskRepository, new IncrementalIdGenerator(100));
+        DraftImportService importService = new DraftImportService(taskService, studyPlanService());
+        SuggestionDraft draft = SuggestionDraft.forStudyPlan(
+                new EntityId(1), studyPlanWithBreakdown(List.of(" Syntax ", " ", "Testing")));
+
+        OperationResult<Void> result = importService.importDraft(draft);
+
+        List<TaskView> tasks = taskService.listTasks().getPayload();
+        assertAll(
+                () -> assertTrue(result.isSuccess()),
+                () -> assertEquals(List.of("Syntax", "Testing"), tasks.stream().map(TaskView::title).toList()),
+                () -> assertEquals(List.of(JULY_31, JULY_31), tasks.stream().map(TaskView::dueDate).toList()),
+                () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
+    }
+
+    @Test
+    void propagatesStudyPlanCreationFailureWithoutCreatingBreakdownTasks() {
+        InMemoryTaskRepository taskRepository = new InMemoryTaskRepository();
+        TaskService taskService = new TaskService(taskRepository, new IncrementalIdGenerator(100));
         StudyPlanService studyPlanService = mock(StudyPlanService.class);
         when(studyPlanService.createStudyPlan("Learn Java", JULY_1, JULY_31, 30, 20))
                 .thenReturn(OperationResult.failure(ErrorCode.VALIDATION_ERROR, "study plan failed"));
-        DraftImportService importService = new DraftImportService(taskService(), studyPlanService);
-        SuggestionDraft draft = SuggestionDraft.forStudyPlan(new EntityId(1), studyPlan());
+        DraftImportService importService = new DraftImportService(taskService, studyPlanService);
+        SuggestionDraft draft = SuggestionDraft.forStudyPlan(
+                new EntityId(1), studyPlanWithBreakdown(List.of("Syntax", "Testing")));
 
         OperationResult<Void> result = importService.importDraft(draft);
 
@@ -152,6 +204,55 @@ class DraftImportServiceTest {
                 () -> assertTrue(result.isFailure()),
                 () -> assertEquals(ErrorCode.VALIDATION_ERROR, result.getErrorCode()),
                 () -> assertEquals("study plan failed", result.getMessage()),
+                () -> assertTrue(taskService.listTasks().getPayload().isEmpty()),
+                () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
+    }
+
+    @Test
+    void rollsBackStudyPlanAndCreatedBreakdownTasksWhenBreakdownTaskCreationFails() {
+        FailingTaskRepository taskRepository = new FailingTaskRepository();
+        TaskService taskService = new TaskService(taskRepository, new IncrementalIdGenerator(100));
+        InMemoryStudyPlanRepository studyPlanRepository = new InMemoryStudyPlanRepository();
+        StudyPlanService studyPlanService = studyPlanService(studyPlanRepository);
+        DraftImportService importService = new DraftImportService(taskService, studyPlanService);
+        taskService.createTask("Existing", "baseline", TaskPriority.LOW, JUNE_12);
+        taskRepository.failOnSave(2, new IllegalArgumentException("planned breakdown task creation failure"));
+        SuggestionDraft draft = SuggestionDraft.forStudyPlan(
+                new EntityId(1), studyPlanWithBreakdown(List.of("Syntax", "Testing")));
+
+        OperationResult<Void> result = importService.importDraft(draft);
+
+        List<TaskView> tasks = taskService.listTasks().getPayload();
+        assertAll(
+                () -> assertTrue(result.isFailure()),
+                () -> assertEquals(ErrorCode.VALIDATION_ERROR, result.getErrorCode()),
+                () -> assertEquals("planned breakdown task creation failure", result.getMessage()),
+                () -> assertTrue(studyPlanService.listStudyPlans().getPayload().isEmpty()),
+                () -> assertEquals(List.of("Existing"), tasks.stream().map(TaskView::title).toList()),
+                () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
+    }
+
+    @Test
+    void rollsBackStudyPlanAndCreatedBreakdownTasksWhenBreakdownTaskCreationThrowsRuntimeException() {
+        FailingTaskRepository taskRepository = new FailingTaskRepository();
+        TaskService taskService = new TaskService(taskRepository, new IncrementalIdGenerator(100));
+        InMemoryStudyPlanRepository studyPlanRepository = new InMemoryStudyPlanRepository();
+        StudyPlanService studyPlanService = studyPlanService(studyPlanRepository);
+        DraftImportService importService = new DraftImportService(taskService, studyPlanService);
+        taskService.createTask("Existing", "baseline", TaskPriority.LOW, JUNE_12);
+        taskRepository.failOnSave(2, new IllegalStateException("planned breakdown task repository failure"));
+        SuggestionDraft draft = SuggestionDraft.forStudyPlan(
+                new EntityId(1), studyPlanWithBreakdown(List.of("Syntax", "Testing")));
+
+        OperationResult<Void> result = importService.importDraft(draft);
+
+        List<TaskView> tasks = taskService.listTasks().getPayload();
+        assertAll(
+                () -> assertTrue(result.isFailure()),
+                () -> assertEquals(ErrorCode.SYSTEM_ERROR, result.getErrorCode()),
+                () -> assertEquals("failed to import suggestion draft", result.getMessage()),
+                () -> assertTrue(studyPlanService.listStudyPlans().getPayload().isEmpty()),
+                () -> assertEquals(List.of("Existing"), tasks.stream().map(TaskView::title).toList()),
                 () -> assertEquals(SuggestionDraftStatus.CONFIRMABLE, draft.getStatus()));
     }
 
@@ -181,14 +282,18 @@ class DraftImportServiceTest {
         return new TaskDraftItem(title, "description", TaskPriority.MEDIUM, dueDate);
     }
 
-    private static StudyPlanDraftContent studyPlan() {
+    private static StudyPlanDraftContent studyPlanWithBreakdown(List<String> breakdown) {
         return new StudyPlanDraftContent(
                 "Learn Java",
                 JULY_1,
                 JULY_31,
                 30,
                 Progress.of(20),
-                List.of("Syntax", "Testing"));
+                breakdown);
+    }
+
+    private static StudyPlanDraftContent studyPlanWithoutBreakdown() {
+        return studyPlanWithBreakdown(List.of());
     }
 
     private static TaskService taskService() {

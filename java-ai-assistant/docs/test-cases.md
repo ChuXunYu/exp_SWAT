@@ -35,7 +35,8 @@
 | DRAFT-06 | 单元测试 | 状态迁移 | `DraftLifecycleService.confirmDraft` | `DraftLifecycleServiceTest.confirmDraftRejectsTerminalDraftsWithoutImporting` | 已导入或已取消草稿重复确认 | 返回状态冲突且不调用导入服务 | 通过 |
 | DRAFT-07 | 服务层场景测试 | 基本路径 | `DraftImportService.importDraft` | `DraftImportServiceTest.importsAllTaskDraftItems` | 多个任务草稿均含 dueDate | 批量创建任务成功 | 通过 |
 | DRAFT-08 | 服务层场景测试 | 回滚路径 | `DraftImportService.importDraft` | `DraftImportServiceTest.rejectsTaskDraftMissingDueDateBeforeCreatingAnyTask`, `DraftImportServiceTest.rollsBackCreatedTasksWhenTaskCreationFails` | dueDate 缺失或第二个任务创建失败 | 不写入或回滚已写入任务 | 通过 |
-| DRAFT-09 | 服务层场景测试 | 基本路径 | `DraftImportService.importDraft` | `DraftImportServiceTest.importsStudyPlanDraft`, `DraftImportServiceTest.propagatesStudyPlanCreationFailure` | 学习计划草稿成功或目标服务校验失败 | 成功导入或传播失败 | 通过 |
+| DRAFT-09 | 服务层场景测试 | 基本路径 | `DraftImportService.importDraft` | `DraftImportServiceTest.importsStudyPlanDraftCreatesTasksForBreakdown`, `DraftImportServiceTest.importsStudyPlanDraftWithoutBreakdownCreatesOnlyStudyPlan`, `DraftImportServiceTest.propagatesStudyPlanCreationFailureWithoutCreatingBreakdownTasks` | 学习计划草稿成功、无 breakdown 或目标服务校验失败 | 成功导入学习计划并将 breakdown 同步为任务，或传播失败且不创建任务 | 通过 |
+| DRAFT-16 | 服务层场景测试 | 回滚路径 | `DraftImportService.importDraft` | `DraftImportServiceTest.rollsBackStudyPlanAndCreatedBreakdownTasksWhenBreakdownTaskCreationFails`, `DraftImportServiceTest.rollsBackStudyPlanAndCreatedBreakdownTasksWhenBreakdownTaskCreationThrowsRuntimeException` | 学习计划已创建但 breakdown 任务创建失败或抛运行时异常 | 回滚本次 breakdown 任务并补偿删除本次学习计划，既有任务不受影响 | 通过 |
 | DRAFT-10 | 控制台交互单元测试 | 边界值 | `ConsoleApplication` 草稿菜单 | `ConsoleApplicationTest.draftMenuRejectsInvalidIdBeforeCallingDraftLifecycleService` | 非数字、小数、非正整数、超出 `long` 的草稿 id | 不调用生命周期服务 | 通过 |
 | DRAFT-11 | 服务层场景测试 | 基本路径 | `StructuredSuggestionDraftService.generateTaskDraft` | `StructuredSuggestionDraftServiceTest.generateTaskDraftParsesAssignsIdAndSavesDraft` | AI 返回合法任务草稿 JSON 且包含 dueDate | 分配草稿 id、保存草稿并返回视图 | 通过 |
 | DRAFT-12 | 服务层场景测试 | 基本路径 | `StructuredSuggestionDraftService.generateStudyPlanDraft` | `StructuredSuggestionDraftServiceTest.generateStudyPlanDraftParsesAssignsIdSavesBreakdown` | AI 返回合法学习计划草稿 JSON 且包含 breakdown | 保存学习计划草稿并保留拆解步骤 | 通过 |
@@ -84,7 +85,7 @@
 | 编号 | 测试层级 | 测试方法 | 被测类/方法 | JUnit 测试类/方法 | 输入或前置条件 | 预期结果 | 实际结果 |
 |------|----------|----------|-------------|-------------------|----------------|----------|----------|
 | FINANCE-01 | 单元测试 | 基本路径 | `FinanceService.recordIncome`, `FinanceService.recordExpense` | `FinanceServiceTest.recordIncomeCreatesRecordAndReturnsView`, `FinanceServiceTest.recordExpenseCreatesRecordAndReturnsView`, `ConsoleApplicationTest.financeMenuAddsIncomeExpenseAndSummaryReflectsBalance` | 收入、支出记录 | 创建交易并保留类型 | 通过 |
-| FINANCE-02 | 单元测试 | 边界值 | `FinanceService.addTransaction`, `TransactionAmount` | `FinanceServiceTest.addTransactionRejectsInvalidAmountAndDoesNotStore`, `TransactionAmountTest` | 金额 0、负金额 | 返回校验失败 | 通过 |
+| FINANCE-02 | 单元测试 | 边界值 | `FinanceService.addTransaction`, `TransactionAmount` | `FinanceServiceTest.recordTransactionRejectsInvalidAmountCategoryAndDateAndKeepsRepositoryUnchanged`, `TransactionAmountTest` | 金额 0、负金额 | 返回校验失败 | 通过 |
 | FINANCE-03 | 单元测试 | 边界值 | `MoneyValue`, `TransactionAmount` | `MoneyValueTest`, `TransactionAmountTest` | 两位小数金额 | 金额精度按业务值对象校验 | 通过 |
 | FINANCE-04 | 单元测试 | 条件覆盖 | `FinanceService.listTransactions` | `FinanceServiceTest.listTransactionsWithQueryFiltersByTypeCategoryDateRangeAndCombination` | 类型、类别、日期范围查询 | 返回匹配交易 | 通过 |
 | FINANCE-05 | 单元测试 | 边界值 | `TransactionQuery.byDateRange` | `TransactionQueryTest` 日期范围场景 | 开始日期晚于结束日期 | 拒绝非法日期范围 | 通过 |
@@ -120,7 +121,7 @@
 | 链路 | 覆盖用例 | 预期同步关系 | 实际结果 |
 |------|----------|--------------|----------|
 | AI 任务草稿确认导入到任务服务 | DRAFT-04, DRAFT-07, TASK-08 | 导入成功后任务列表和摘要可见新任务 | 通过 |
-| AI 学习计划草稿确认导入到学习计划服务 | DRAFT-09, STUDY-01, SUMMARY-02 | 导入成功后本周学习计划摘要可见 | 通过 |
+| AI 学习计划草稿确认导入到学习计划服务和任务服务 | DRAFT-09, DRAFT-16, STUDY-01, TASK-08, SUMMARY-02 | 导入成功后本周学习计划摘要可见，breakdown 步骤同步为任务服务可见的待办 | 通过 |
 | AI 草稿取消不写入本地业务数据 | DRAFT-05 | 取消后任务和学习计划数据不变化 | 通过 |
 | AI 草稿导入失败回滚 | DRAFT-08 | 任务批量导入中途失败时已创建任务被删除 | 通过 |
 | 任务变化后汇总同步 | TASK-08, SUMMARY-02 | 今日任务数量和完成状态在仪表盘中同步 | 通过 |

@@ -54,10 +54,15 @@ JaCoCo HTML 报告输出到 `target/site/jacoco/index.html`。本文件只记录
 6. 任一任务创建返回失败时，回滚已创建任务并返回失败。
 7. 任一任务创建抛出运行时异常时，回滚已创建任务并映射为系统失败。
 8. 学习计划草稿读取内容并调用 `StudyPlanService.createStudyPlan`。
-9. 学习计划创建失败时传播失败，成功时返回成功。
-10. 捕获 `BusinessException` 和其他 `RuntimeException` 并映射为 `OperationResult` 失败。
+9. 学习计划创建失败时传播失败，不创建 breakdown 任务。
+10. 学习计划创建成功后将 breakdown 转为任务列表。
+11. breakdown 为空时直接返回成功。
+12. breakdown 非空时逐条创建正式任务。
+13. 任一 breakdown 任务创建返回失败时，回滚已创建 breakdown 任务并补偿删除本次学习计划。
+14. 任一 breakdown 任务创建抛出运行时异常时，回滚已创建 breakdown 任务、补偿删除本次学习计划并映射为系统失败。
+15. 捕获 `BusinessException` 和其他 `RuntimeException` 并映射为 `OperationResult` 失败。
 
-圈复杂度估算：按主要判定节点估算为 8，包含空草稿、类型分支、dueDate 校验循环、任务创建循环、创建失败、运行时异常和学习计划失败。
+圈复杂度估算：按主要判定节点估算为 12，包含空草稿、类型分支、dueDate 校验循环、任务创建循环、创建失败、运行时异常、学习计划失败、breakdown 空分支和学习计划补偿分支。
 
 独立路径：
 
@@ -68,10 +73,13 @@ JaCoCo HTML 报告输出到 `target/site/jacoco/index.html`。本文件只记录
 | D-P3 | 任务草稿缺失 dueDate | 创建前失败，不写入任务 | DRAFT-08；`DraftImportServiceTest.rejectsTaskDraftMissingDueDateBeforeCreatingAnyTask` |
 | D-P4 | 任务创建返回失败 | 回滚已创建任务并返回失败 | DRAFT-08；`DraftImportServiceTest.rollsBackCreatedTasksWhenTaskCreationFails` |
 | D-P5 | 任务创建抛运行时异常 | 回滚已创建任务并返回系统失败 | DRAFT-08；`DraftImportServiceTest.rollsBackCreatedTasksWhenTaskCreationThrowsRuntimeException` |
-| D-P6 | 学习计划草稿有效 | 创建学习计划成功 | DRAFT-09；`DraftImportServiceTest.importsStudyPlanDraft` |
-| D-P7 | 学习计划服务返回失败 | 传播目标服务失败 | DRAFT-09；`DraftImportServiceTest.propagatesStudyPlanCreationFailure` |
+| D-P6 | 学习计划草稿含 breakdown | 创建学习计划并按顺序创建正式任务 | DRAFT-09；`DraftImportServiceTest.importsStudyPlanDraftCreatesTasksForBreakdown` |
+| D-P7 | 学习计划草稿无 breakdown | 只创建学习计划 | DRAFT-09；`DraftImportServiceTest.importsStudyPlanDraftWithoutBreakdownCreatesOnlyStudyPlan` |
+| D-P8 | 学习计划服务返回失败 | 传播目标服务失败且不创建任务 | DRAFT-09；`DraftImportServiceTest.propagatesStudyPlanCreationFailureWithoutCreatingBreakdownTasks` |
+| D-P9 | breakdown 任务创建返回失败 | 回滚已创建 breakdown 任务并补偿删除学习计划 | DRAFT-16；`DraftImportServiceTest.rollsBackStudyPlanAndCreatedBreakdownTasksWhenBreakdownTaskCreationFails` |
+| D-P10 | breakdown 任务创建抛运行时异常 | 回滚已创建 breakdown 任务、补偿删除学习计划并返回系统失败 | DRAFT-16；`DraftImportServiceTest.rollsBackStudyPlanAndCreatedBreakdownTasksWhenBreakdownTaskCreationThrowsRuntimeException` |
 
-覆盖结论：路径覆盖草稿类型分支、任务批量先校验后写入、回滚、学习计划导入和失败传播。
+覆盖结论：路径覆盖草稿类型分支、任务批量先校验后写入、回滚、学习计划导入、breakdown 转正式任务、跨模块补偿和失败传播。
 
 ### `assistant.summary.SummaryService.getDashboardSummary()`
 
@@ -110,7 +118,7 @@ JaCoCo HTML 报告输出到 `target/site/jacoco/index.html`。本文件只记录
 | 方法 | 独立路径 | 测试类/方法或用例编号 | 覆盖结论 |
 |------|----------|------------------------|----------|
 | `assistant.finance.FinanceStatisticsService.calculate(List<TransactionRecord>)` | F-P1 至 F-P5 | FINANCE-06；`FinanceStatisticsServiceTest.calculateReturnsZeroForEmptyRecords`, `FinanceStatisticsServiceTest.calculateAccumulatesIncomeAndExpenseSeparately`, `FinanceStatisticsServiceTest.calculateAllowsNegativeBalanceWhenExpenseExceedsIncome` | 覆盖空集合、收入、支出、混合和负结余 |
-| `assistant.ai.DraftImportService.importDraft(SuggestionDraft)` | D-P1 至 D-P7 | DRAFT-07 至 DRAFT-09；`DraftImportServiceTest` 任务和学习计划导入场景 | 覆盖类型分支、校验、回滚和失败传播 |
+| `assistant.ai.DraftImportService.importDraft(SuggestionDraft)` | D-P1 至 D-P10 | DRAFT-07 至 DRAFT-09, DRAFT-16；`DraftImportServiceTest` 任务和学习计划导入场景 | 覆盖类型分支、校验、回滚、breakdown 任务同步和失败传播 |
 | `assistant.summary.SummaryService.getDashboardSummary()` | S-P1 至 S-P6 | SUMMARY-01 至 SUMMARY-06；`SummaryServiceTest` 汇总场景 | 覆盖空数据、多模块、时间范围、标签统计和依赖失败 |
 | `assistant.summary.SummaryService.buildLocalContext()` | S-P7 | SUMMARY-05；`SummaryServiceTest.buildLocalContextReturnsLocalContextFromSuccessfulSummary`, `LocalContextTest.fromBuildsStableOverviewAndEmptyLinesForEmptySummary`, `LocalContextTest.fromBuildsLinesInSourceOrderForMultiModuleData` | 覆盖 AI 本地上下文链路 |
 

@@ -9,3 +9,14 @@
 任务：新增或补齐应用层结构化建议生成服务，串联 AI 调用、结构化解析、草稿 id 分配、dueDate 校验、草稿保存；在 ConsoleApplication 的 AI 草稿菜单增加生成任务草稿和生成学习计划草稿入口；补充服务层、CLI 和生命周期回归测试，预期涉及 /root/exp_SWAT/java-ai-assistant/src/main/java/assistant/ai、/root/exp_SWAT/java-ai-assistant/src/main/java/assistant/app 及对应测试。
 选择理由：AI 结构化草稿端到端入口是当前最高风险主流程缺口；任务草稿 dueDate 不一致会直接影响新生成草稿的可确认性，应在生成保存入口同步约束，避免继续产生可查看但不可导入的新草稿。
 上下文：项目已有 StructuredSuggestionParser、SuggestionDraft、SuggestionDraftRepository、DraftLifecycleService、DraftImportService、AiAssistantService、AiScenario、IdGenerator 和草稿菜单管理能力，但缺少“AI 结构化响应 -> 解析 -> 保存草稿 -> CLI 可见”的应用服务和入口。TaskDraftItem 允许 dueDate 为空，而 DraftImportService 要求任务草稿导入时 dueDate 非空；本轮新生成草稿必须保存前拒绝缺 dueDate 的任务项并给出清晰错误。
+
+---
+
+## R2 PASSED AI 结构化草稿生成入口与 dueDate 保存前一致性
+结果：新增 StructuredSuggestionDraftService，串联 AI 结构化场景、解析、草稿 id 分配、保存前类型校验、任务 dueDate 校验、草稿保存和视图返回；ApplicationFactory/ApplicationServices 已装配该服务；ConsoleApplication 的 AI 草稿菜单已支持生成任务草稿和学习计划草稿，生成后可列表、查看、确认、取消。
+测试：新增和更新 StructuredSuggestionDraftServiceTest、ApplicationFactoryTest、ConsoleApplicationTest、DemoDataFactoryTest 及测试文档；验证报告显示 mvn test 通过 979 个测试。
+
+## R2 NEW 学习计划草稿 breakdown 导入落地
+任务：在 DraftImportService 导入学习计划草稿时，为非空 breakdown 定义并实现正式数据落地策略；建议将每个 breakdown 项转换为与学习计划目标相关的 TODO 任务，并在确认导入后可通过任务服务查询。补充导入服务、失败一致性和必要 CLI/服务查询测试，同步测试计划、测试用例和受影响文档。
+选择理由：v1 已补齐 AI 结构化生成入口并保留学习计划草稿 breakdown，但确认导入仍只创建正式学习计划，breakdown 会被静默丢弃；这是本轮必须修复的直接数据一致性缺口，且依赖 v1 的草稿生成链路。
+上下文：StudyPlanDraftContent 已清洗并保存 breakdown；StructuredSuggestionDraftService 生成学习计划草稿时保留 breakdown；ConsoleApplication 可展示草稿 breakdown；DraftImportService.importStudyPlan() 当前只调用 StudyPlanService.createStudyPlan(...)，没有读取 content.breakdown()。正式 StudyPlan 模型没有 breakdown 字段，任务模块可承载可执行步骤。若采用“breakdown 转任务”策略，任务 dueDate 应使用稳定规则，例如学习计划 endDate；优先级使用固定默认值，例如 MEDIUM；描述应包含来源学习计划目标，便于用户识别。导入必须避免“学习计划已创建但 breakdown 部分丢失且用户无感知”的情况，至少应先校验 breakdown 可生成任务，再在任务创建失败时返回可解释错误并补偿已创建任务/学习计划，或选择先创建任务再创建学习计划并处理失败回滚。
