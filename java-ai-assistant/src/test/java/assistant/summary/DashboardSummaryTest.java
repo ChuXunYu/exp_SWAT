@@ -38,21 +38,25 @@ class DashboardSummaryTest {
 
     @Test
     void constructorCopiesListsAndMapAsUnmodifiableSnapshots() {
-        ArrayList<TaskView> tasks = new ArrayList<>(List.of(task(1, "Review")));
-        ArrayList<ScheduleView> schedules = new ArrayList<>(List.of(schedule(2, "Standup")));
-        ArrayList<StudyPlanView> plans = new ArrayList<>(List.of(plan(3, "Java", 100, StudyPlanStatus.COMPLETED)));
-        ArrayList<TransactionView> transactions = new ArrayList<>(List.of(transaction(4, TransactionType.INCOME)));
+        ArrayList<TaskView> todayTasks = new ArrayList<>(List.of(task(1, "Review")));
+        ArrayList<TaskView> overdueTasks = new ArrayList<>(List.of(task(2, "Overdue")));
+        ArrayList<TaskView> upcomingHighPriorityTasks = new ArrayList<>(List.of(task(3, "Urgent")));
+        ArrayList<ScheduleView> schedules = new ArrayList<>(List.of(schedule(4, "Standup")));
+        ArrayList<StudyPlanView> plans = new ArrayList<>(List.of(plan(5, "Java", 100, StudyPlanStatus.COMPLETED)));
+        ArrayList<TransactionView> transactions = new ArrayList<>(List.of(transaction(6, TransactionType.INCOME)));
         LinkedHashMap<Tag, Integer> tags = new LinkedHashMap<>();
         tags.put(Tag.of("java"), 2);
         tags.put(Tag.of("test"), 1);
 
-        DashboardSummary summary = new DashboardSummary(
+        DashboardSummary summary = summary(
                 TODAY,
                 WEEK_START,
                 WEEK_END,
                 MONTH_START,
                 MONTH_END,
-                tasks,
+                todayTasks,
+                overdueTasks,
+                upcomingHighPriorityTasks,
                 schedules,
                 plans,
                 1,
@@ -62,7 +66,9 @@ class DashboardSummaryTest {
                 3,
                 tags);
 
-        tasks.clear();
+        todayTasks.clear();
+        overdueTasks.clear();
+        upcomingHighPriorityTasks.clear();
         schedules.clear();
         plans.clear();
         transactions.clear();
@@ -70,11 +76,15 @@ class DashboardSummaryTest {
 
         assertAll(
                 () -> assertEquals(1, summary.todayTasks().size()),
+                () -> assertEquals(1, summary.overdueTasks().size()),
+                () -> assertEquals(1, summary.upcomingHighPriorityTasks().size()),
                 () -> assertEquals(1, summary.todaySchedules().size()),
                 () -> assertEquals(1, summary.weekStudyPlans().size()),
                 () -> assertEquals(1, summary.monthTransactions().size()),
                 () -> assertEquals(List.of(Tag.of("java"), Tag.of("test")), List.copyOf(summary.noteTagDistribution().keySet())),
                 () -> assertThrows(UnsupportedOperationException.class, () -> summary.todayTasks().add(task(9, "Later"))),
+                () -> assertThrows(UnsupportedOperationException.class, () -> summary.overdueTasks().clear()),
+                () -> assertThrows(UnsupportedOperationException.class, () -> summary.upcomingHighPriorityTasks().clear()),
                 () -> assertThrows(UnsupportedOperationException.class, () -> summary.todaySchedules().clear()),
                 () -> assertThrows(UnsupportedOperationException.class, () -> summary.weekStudyPlans().clear()),
                 () -> assertThrows(UnsupportedOperationException.class, () -> summary.monthTransactions().clear()),
@@ -84,279 +94,106 @@ class DashboardSummaryTest {
     @Test
     void constructorRejectsNullRequiredFieldsAndElements() {
         DashboardSummary valid = emptySummary();
+
         assertAll(
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                null,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                List.of(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                Map.of())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                null,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                List.of(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                Map.of())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                null,
-                                MONTH_START,
-                                MONTH_END,
-                                List.of(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                Map.of())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                null,
-                                MONTH_END,
-                                List.of(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                Map.of())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                null,
-                                List.of(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                Map.of())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                null,
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                Map.of())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                null,
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                valid.monthTransactions(),
-                                0,
-                                valid.noteTagDistribution())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                listWithNull(),
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                valid.monthTransactions(),
-                                0,
-                                valid.noteTagDistribution())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                valid.todaySchedules(),
-                                null,
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                valid.monthTransactions(),
-                                0,
-                                valid.noteTagDistribution())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                listWithNull(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                Map.of())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                valid.todaySchedules(),
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                null,
-                                valid.monthTransactions(),
-                                0,
-                                valid.noteTagDistribution())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                valid.todaySchedules(),
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                null,
-                                0,
-                                valid.noteTagDistribution())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                valid.todaySchedules(),
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                listWithNull(),
-                                0,
-                                valid.noteTagDistribution())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                valid.todaySchedules(),
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                valid.monthTransactions(),
-                                0,
-                                null)),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                valid.todaySchedules(),
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                valid.monthTransactions(),
-                                0,
-                                mapWithNullKey())),
-                () -> assertThrows(
-                        NullPointerException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                valid.todayTasks(),
-                                valid.todaySchedules(),
-                                valid.weekStudyPlans(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                valid.monthTransactions(),
-                                0,
-                                mapWithNullValue())));
+                () -> assertThrows(NullPointerException.class, () -> summary(
+                        null, WEEK_START, WEEK_END, MONTH_START, MONTH_END)),
+                () -> assertThrows(NullPointerException.class, () -> summary(
+                        TODAY, null, WEEK_END, MONTH_START, MONTH_END)),
+                () -> assertThrows(NullPointerException.class, () -> summary(
+                        TODAY, WEEK_START, null, MONTH_START, MONTH_END)),
+                () -> assertThrows(NullPointerException.class, () -> summary(
+                        TODAY, WEEK_START, WEEK_END, null, MONTH_END)),
+                () -> assertThrows(NullPointerException.class, () -> summary(
+                        TODAY, WEEK_START, WEEK_END, MONTH_START, null)),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        null,
+                        valid.overdueTasks(),
+                        valid.upcomingHighPriorityTasks(),
+                        valid.todaySchedules(),
+                        valid.weekStudyPlans(),
+                        valid.monthFinanceStatistics(),
+                        valid.monthTransactions(),
+                        valid.noteTagDistribution())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        valid.todayTasks(),
+                        null,
+                        valid.upcomingHighPriorityTasks(),
+                        valid.todaySchedules(),
+                        valid.weekStudyPlans(),
+                        valid.monthFinanceStatistics(),
+                        valid.monthTransactions(),
+                        valid.noteTagDistribution())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        valid.todayTasks(),
+                        valid.overdueTasks(),
+                        null,
+                        valid.todaySchedules(),
+                        valid.weekStudyPlans(),
+                        valid.monthFinanceStatistics(),
+                        valid.monthTransactions(),
+                        valid.noteTagDistribution())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        valid.todayTasks(),
+                        valid.overdueTasks(),
+                        valid.upcomingHighPriorityTasks(),
+                        null,
+                        valid.weekStudyPlans(),
+                        valid.monthFinanceStatistics(),
+                        valid.monthTransactions(),
+                        valid.noteTagDistribution())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        valid.todayTasks(),
+                        valid.overdueTasks(),
+                        valid.upcomingHighPriorityTasks(),
+                        valid.todaySchedules(),
+                        null,
+                        valid.monthFinanceStatistics(),
+                        valid.monthTransactions(),
+                        valid.noteTagDistribution())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        valid.todayTasks(),
+                        valid.overdueTasks(),
+                        valid.upcomingHighPriorityTasks(),
+                        valid.todaySchedules(),
+                        valid.weekStudyPlans(),
+                        null,
+                        valid.monthTransactions(),
+                        valid.noteTagDistribution())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        valid.todayTasks(),
+                        valid.overdueTasks(),
+                        valid.upcomingHighPriorityTasks(),
+                        valid.todaySchedules(),
+                        valid.weekStudyPlans(),
+                        valid.monthFinanceStatistics(),
+                        null,
+                        valid.noteTagDistribution())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        valid.todayTasks(),
+                        valid.overdueTasks(),
+                        valid.upcomingHighPriorityTasks(),
+                        valid.todaySchedules(),
+                        valid.weekStudyPlans(),
+                        valid.monthFinanceStatistics(),
+                        valid.monthTransactions(),
+                        null)),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        listWithNull(), List.of(), List.of(), List.of(), List.of(), FinanceStatistics.zero(), List.of(), Map.of())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        List.of(), listWithNull(), List.of(), List.of(), List.of(), FinanceStatistics.zero(), List.of(), Map.of())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        List.of(), List.of(), listWithNull(), List.of(), List.of(), FinanceStatistics.zero(), List.of(), Map.of())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        List.of(), List.of(), List.of(), listWithNull(), List.of(), FinanceStatistics.zero(), List.of(), Map.of())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        List.of(), List.of(), List.of(), List.of(), listWithNull(), FinanceStatistics.zero(), List.of(), Map.of())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        List.of(), List.of(), List.of(), List.of(), List.of(), FinanceStatistics.zero(), listWithNull(), Map.of())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        List.of(), List.of(), List.of(), List.of(), List.of(), FinanceStatistics.zero(), List.of(), mapWithNullKey())),
+                () -> assertThrows(NullPointerException.class, () -> summaryWithLists(
+                        List.of(), List.of(), List.of(), List.of(), List.of(), FinanceStatistics.zero(), List.of(), mapWithNullValue())));
     }
 
     @Test
@@ -366,58 +203,22 @@ class DashboardSummaryTest {
                 plan(2, "Doing", 40, StudyPlanStatus.IN_PROGRESS));
 
         assertAll(
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> summaryWith(WEEK_END, WEEK_START, MONTH_START, MONTH_END, plans, 1, 1)),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> summaryWith(WEEK_START, WEEK_END, MONTH_END, MONTH_START, plans, 1, 1)),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> summaryWith(WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, -1, 1)),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> summaryWith(WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, 2, 0)),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> summaryWith(WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, 1, -1)),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> summaryWith(WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, 1, 0)),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                List.of(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                -1,
-                                Map.of())),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> new DashboardSummary(
-                                TODAY,
-                                WEEK_START,
-                                WEEK_END,
-                                MONTH_START,
-                                MONTH_END,
-                                List.of(),
-                                List.of(),
-                                List.of(),
-                                0,
-                                0,
-                                FinanceStatistics.zero(),
-                                List.of(),
-                                0,
-                                mapWithCount(0))));
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_END, WEEK_START, MONTH_START, MONTH_END, plans, 1, 1, 0, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_START, WEEK_END, MONTH_END, MONTH_START, plans, 1, 1, 0, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, -1, 1, 0, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, 2, 0, 0, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, 1, -1, 0, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_START, WEEK_END, MONTH_START, MONTH_END, plans, 1, 0, 0, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_START, WEEK_END, MONTH_START, MONTH_END, List.of(), 0, 0, -1, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class, () -> summaryWithCounts(
+                        WEEK_START, WEEK_END, MONTH_START, MONTH_END, List.of(), 0, 0, 0, mapWithCount(0))));
     }
 
     @Test
@@ -426,6 +227,8 @@ class DashboardSummaryTest {
 
         assertAll(
                 () -> assertTrue(summary.todayTasks().isEmpty()),
+                () -> assertTrue(summary.overdueTasks().isEmpty()),
+                () -> assertTrue(summary.upcomingHighPriorityTasks().isEmpty()),
                 () -> assertTrue(summary.todaySchedules().isEmpty()),
                 () -> assertTrue(summary.weekStudyPlans().isEmpty()),
                 () -> assertEquals(FinanceStatistics.zero(), summary.monthFinanceStatistics()),
@@ -435,12 +238,23 @@ class DashboardSummaryTest {
     }
 
     private static DashboardSummary emptySummary() {
-        return new DashboardSummary(
-                TODAY,
-                WEEK_START,
-                WEEK_END,
-                MONTH_START,
-                MONTH_END,
+        return summary(TODAY, WEEK_START, WEEK_END, MONTH_START, MONTH_END);
+    }
+
+    private static DashboardSummary summary(
+            LocalDate today,
+            LocalDate weekStart,
+            LocalDate weekEnd,
+            LocalDate monthStart,
+            LocalDate monthEnd) {
+        return summary(
+                today,
+                weekStart,
+                weekEnd,
+                monthStart,
+                monthEnd,
+                List.of(),
+                List.of(),
                 List.of(),
                 List.of(),
                 List.of(),
@@ -452,15 +266,45 @@ class DashboardSummaryTest {
                 Map.of());
     }
 
-    private static DashboardSummary summaryWith(
+    private static DashboardSummary summaryWithLists(
+            List<TaskView> todayTasks,
+            List<TaskView> overdueTasks,
+            List<TaskView> upcomingHighPriorityTasks,
+            List<ScheduleView> schedules,
+            List<StudyPlanView> plans,
+            FinanceStatistics statistics,
+            List<TransactionView> transactions,
+            Map<Tag, Integer> tags) {
+        return summary(
+                TODAY,
+                WEEK_START,
+                WEEK_END,
+                MONTH_START,
+                MONTH_END,
+                todayTasks,
+                overdueTasks,
+                upcomingHighPriorityTasks,
+                schedules,
+                plans,
+                0,
+                0,
+                statistics,
+                transactions,
+                tags == null ? 0 : tags.values().stream().filter(value -> value != null).mapToInt(Integer::intValue).sum(),
+                tags);
+    }
+
+    private static DashboardSummary summaryWithCounts(
             LocalDate weekStart,
             LocalDate weekEnd,
             LocalDate monthStart,
             LocalDate monthEnd,
             List<StudyPlanView> plans,
             int completed,
-            int incomplete) {
-        return new DashboardSummary(
+            int incomplete,
+            int noteCount,
+            Map<Tag, Integer> tags) {
+        return summary(
                 TODAY,
                 weekStart,
                 weekEnd,
@@ -468,13 +312,51 @@ class DashboardSummaryTest {
                 monthEnd,
                 List.of(),
                 List.of(),
+                List.of(),
+                List.of(),
                 plans,
                 completed,
                 incomplete,
                 FinanceStatistics.zero(),
                 List.of(),
-                0,
-                Map.of());
+                noteCount,
+                tags);
+    }
+
+    private static DashboardSummary summary(
+            LocalDate today,
+            LocalDate weekStart,
+            LocalDate weekEnd,
+            LocalDate monthStart,
+            LocalDate monthEnd,
+            List<TaskView> todayTasks,
+            List<TaskView> overdueTasks,
+            List<TaskView> upcomingHighPriorityTasks,
+            List<ScheduleView> schedules,
+            List<StudyPlanView> plans,
+            int completed,
+            int incomplete,
+            FinanceStatistics statistics,
+            List<TransactionView> transactions,
+            int noteCount,
+            Map<Tag, Integer> tags) {
+        return new DashboardSummary(
+                today,
+                weekStart,
+                weekEnd,
+                monthStart,
+                monthEnd,
+                todayTasks,
+                overdueTasks,
+                upcomingHighPriorityTasks,
+                schedules,
+                plans,
+                completed,
+                incomplete,
+                statistics,
+                transactions,
+                noteCount,
+                tags);
     }
 
     private static TaskView task(long id, String title) {

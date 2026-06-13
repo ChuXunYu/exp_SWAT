@@ -42,6 +42,8 @@ public final class PromptBuilder {
         return "用户问题：\n" + userQuestion
                 + "\n\n本地总览：\n" + localContext.overviewText()
                 + "\n\n" + section("今日任务：", localContext.todayTaskLines())
+                + "\n\n" + section("逾期未完成任务：", localContext.overdueTaskLines())
+                + "\n\n" + section("未来7天高优先级任务：", localContext.upcomingHighPriorityTaskLines())
                 + "\n\n" + section("今日日程：", localContext.todayScheduleLines())
                 + "\n\n" + section("本周学习计划：", localContext.weekStudyPlanLines())
                 + "\n\n" + section("本月收支：", localContext.monthTransactionLines())

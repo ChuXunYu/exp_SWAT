@@ -21,6 +21,8 @@ public record DashboardSummary(
         LocalDate monthStart,
         LocalDate monthEnd,
         List<TaskView> todayTasks,
+        List<TaskView> overdueTasks,
+        List<TaskView> upcomingHighPriorityTasks,
         List<ScheduleView> todaySchedules,
         List<StudyPlanView> weekStudyPlans,
         int completedWeekStudyPlanCount,
@@ -43,6 +45,8 @@ public record DashboardSummary(
         }
 
         todayTasks = copyList(todayTasks, "todayTasks");
+        overdueTasks = copyList(overdueTasks, "overdueTasks");
+        upcomingHighPriorityTasks = copyList(upcomingHighPriorityTasks, "upcomingHighPriorityTasks");
         todaySchedules = copyList(todaySchedules, "todaySchedules");
         weekStudyPlans = copyList(weekStudyPlans, "weekStudyPlans");
         if (completedWeekStudyPlanCount < 0) {

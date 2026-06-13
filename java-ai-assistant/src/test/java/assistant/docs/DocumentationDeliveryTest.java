@@ -26,6 +26,8 @@ class DocumentationDeliveryTest {
     private static final Path TEST_SOURCES = Path.of("src/test/java");
     private static final Pattern TEST_METHOD_PATTERN = Pattern.compile(
             "@Test\\s+(?:void\\s+)?([A-Za-z_$][A-Za-z\\d_$]*)\\s*\\(");
+    private static final Pattern TEST_REFERENCE_PATTERN = Pattern.compile(
+            "\\b([A-Za-z_$][A-Za-z\\d_$]*Test)\\.([A-Za-z_$][A-Za-z\\d_$]*)\\b");
     private static final Pattern SCORE_ROW_PATTERN = Pattern.compile("\\| [^|]+ \\| (\\d+) \\| [^|]+ \\| [^|]+ \\|");
 
     @Test
@@ -427,28 +429,8 @@ class DocumentationDeliveryTest {
         Map<String, Set<String>> testMethodsByClass = loadTestMethodsByClass();
 
         assertAll(
-                () -> assertReferencesExist(cases, testMethodsByClass, List.of(
-                        reference("AiAssistantServiceTest", "askSendsBuiltRequestToClientAndReturnsContent"),
-                        reference("DeepSeekAiClientTest", "chatMapsTransportExceptions"),
-                        reference("DraftImportServiceTest", "importsAllTaskDraftItems"),
-                        reference("DraftImportServiceTest", "rollsBackCreatedTasksWhenTaskCreationFails"),
-                        reference("ConsoleApplicationTest", "draftMenuRejectsInvalidIdBeforeCallingDraftLifecycleService"),
-                        reference("TaskServiceTest", "createTaskStoresTodoTaskAndReturnsTaskView"),
-                        reference("ScheduleServiceTest", "createScheduleAllowsTouchingTimeRanges"),
-                        reference("StudyPlanServiceTest", "listStudyPlansComputesStatusesWithInjectedCurrentDate"),
-                        reference("FinanceStatisticsServiceTest", "calculateAllowsNegativeBalanceWhenExpenseExceedsIncome"),
-                        reference("NoteServiceTest", "deleteNoteReturnsNotFoundForMissingId"),
-                        reference("SummaryServiceTest", "getDashboardSummaryUsesSingleStableTodaySnapshotForAllDateBoundariesAndQueries"))),
-                () -> assertReferencesExist(coverage, testMethodsByClass, List.of(
-                        reference("FinanceStatisticsServiceTest", "calculateReturnsZeroForEmptyRecords"),
-                        reference("FinanceStatisticsServiceTest", "calculateAccumulatesIncomeAndExpenseSeparately"),
-                        reference("FinanceStatisticsServiceTest", "calculateAllowsNegativeBalanceWhenExpenseExceedsIncome"),
-                        reference("DraftImportServiceTest", "importDraftRejectsNullDraft"),
-                        reference("DraftImportServiceTest", "rollsBackCreatedTasksWhenTaskCreationThrowsRuntimeException"),
-                        reference("DraftImportServiceTest", "propagatesStudyPlanCreationFailure"),
-                        reference("SummaryServiceTest", "getDashboardSummaryPropagatesFirstDependencyFailure"),
-                        reference("SummaryServiceTest", "buildLocalContextReturnsLocalContextFromSuccessfulSummary"),
-                        reference("LocalContextTest", "fromBuildsLinesInSourceOrderForMultiModuleData"))),
+                () -> assertDocumentedTestMethodReferencesExist(cases, testMethodsByClass),
+                () -> assertDocumentedTestMethodReferencesExist(coverage, testMethodsByClass),
                 () -> assertDocumentedClassExists(cases, testMethodsByClass, "StudyPlanAnalysisServiceTest"),
                 () -> assertDocumentedClassExists(cases, testMethodsByClass, "MoneyValueTest"),
                 () -> assertDocumentedClassExists(cases, testMethodsByClass, "TransactionAmountTest"),
@@ -527,15 +509,19 @@ class DocumentationDeliveryTest {
         return fileName.substring(0, fileName.length() - ".java".length());
     }
 
-    private static void assertReferencesExist(
+    private static void assertDocumentedTestMethodReferencesExist(
             String document,
-            Map<String, Set<String>> testMethodsByClass,
-            List<TestReference> references
+            Map<String, Set<String>> testMethodsByClass
     ) {
+        Matcher matcher = TEST_REFERENCE_PATTERN.matcher(document);
+        Set<TestReference> references = new HashSet<>();
+        while (matcher.find()) {
+            references.add(reference(matcher.group(1), matcher.group(2)));
+        }
+        assertFalse(references.isEmpty(), "Document must reference at least one concrete JUnit test method");
         for (TestReference reference : references) {
-            assertDocumentedClassExists(document, testMethodsByClass, reference.className());
-            assertTrue(document.contains(reference.className() + "." + reference.methodName()),
-                    () -> "Missing documented test method reference: " + reference);
+            assertTrue(testMethodsByClass.containsKey(reference.className()),
+                    () -> "Documented test class does not exist in source tree: " + reference.className());
             assertTrue(testMethodsByClass.get(reference.className()).contains(reference.methodName()),
                     () -> "Documented test method does not exist in source tree: " + reference);
         }

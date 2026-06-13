@@ -79,6 +79,8 @@ class PromptBuilderTest {
         assertAll(
                 () -> assertTrue(userMessage.contains("今日任务1项")),
                 () -> assertTrue(userMessage.contains("今日任务：\n- 任务：Review")),
+                () -> assertTrue(userMessage.contains("逾期未完成任务：\n- 任务：Overdue")),
+                () -> assertTrue(userMessage.contains("未来7天高优先级任务：\n- 任务：Urgent")),
                 () -> assertTrue(userMessage.contains("今日日程：\n- 日程：Standup")),
                 () -> assertTrue(userMessage.contains("本周学习计划：\n- 学习：Java")),
                 () -> assertTrue(userMessage.contains("本月收支：\n- 收支：EXPENSE")),
@@ -95,6 +97,8 @@ class PromptBuilderTest {
         assertAll(
                 () -> assertTrue(userMessage.contains("今日任务0项")),
                 () -> assertTrue(userMessage.contains("今日任务：\n（无）")),
+                () -> assertTrue(userMessage.contains("逾期未完成任务：\n（无）")),
+                () -> assertTrue(userMessage.contains("未来7天高优先级任务：\n（无）")),
                 () -> assertTrue(userMessage.contains("今日日程：\n（无）")),
                 () -> assertTrue(userMessage.contains("本周学习计划：\n（无）")),
                 () -> assertTrue(userMessage.contains("本月收支：\n（无）")),
@@ -174,14 +178,16 @@ class PromptBuilderTest {
     }
 
     private static LocalContext emptyContext() {
-        return LocalContext.from(summaryWith(List.of(), List.of(), List.of(), List.of(), Map.of()));
+        return LocalContext.from(summaryWith(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Map.of()));
     }
 
     private static LocalContext populatedContext() {
         LinkedHashMap<Tag, Integer> tags = new LinkedHashMap<>();
         tags.put(Tag.of("java"), 2);
         return LocalContext.from(summaryWith(
-                List.of(task()),
+                List.of(task("Review")),
+                List.of(task("Overdue")),
+                List.of(task("Urgent")),
                 List.of(schedule()),
                 List.of(plan()),
                 List.of(transaction()),
@@ -189,7 +195,9 @@ class PromptBuilderTest {
     }
 
     private static DashboardSummary summaryWith(
-            List<TaskView> tasks,
+            List<TaskView> todayTasks,
+            List<TaskView> overdueTasks,
+            List<TaskView> upcomingHighPriorityTasks,
             List<ScheduleView> schedules,
             List<StudyPlanView> plans,
             List<TransactionView> transactions,
@@ -201,7 +209,9 @@ class PromptBuilderTest {
                 WEEK_END,
                 MONTH_START,
                 MONTH_END,
-                tasks,
+                todayTasks,
+                overdueTasks,
+                upcomingHighPriorityTasks,
                 schedules,
                 plans,
                 completed,
@@ -212,8 +222,8 @@ class PromptBuilderTest {
                 tags);
     }
 
-    private static TaskView task() {
-        return new TaskView(new EntityId(1), "Review", "Description", TaskPriority.HIGH, TODAY, TaskStatus.TODO);
+    private static TaskView task(String title) {
+        return new TaskView(new EntityId(1), title, "Description", TaskPriority.HIGH, TODAY, TaskStatus.TODO);
     }
 
     private static ScheduleView schedule() {

@@ -15,8 +15,10 @@ import assistant.study.StudyPlanQuery;
 import assistant.study.StudyPlanService;
 import assistant.study.StudyPlanStatus;
 import assistant.study.StudyPlanView;
+import assistant.task.TaskPriority;
 import assistant.task.TaskQuery;
 import assistant.task.TaskService;
+import assistant.task.TaskStatus;
 import assistant.task.TaskView;
 import assistant.testability.TimeProvider;
 import java.time.DayOfWeek;
@@ -57,10 +59,14 @@ public final class SummaryService {
         LocalDate monthStart = monthStartOf(today);
         LocalDate monthEnd = monthEndOf(today);
 
-        OperationResult<List<TaskView>> tasksResult = taskService.listTasks(TaskQuery.byDueDate(today));
+        OperationResult<List<TaskView>> tasksResult = taskService.listTasks(TaskQuery.all());
         if (tasksResult.isFailure()) {
             return propagateFailure(tasksResult);
         }
+        List<TaskView> tasks = tasksResult.getPayload();
+        List<TaskView> todayTasks = filterTodayTasks(tasks, today);
+        List<TaskView> overdueTasks = filterOverdueTasks(tasks, today);
+        List<TaskView> upcomingHighPriorityTasks = filterUpcomingHighPriorityTasks(tasks, today);
 
         OperationResult<List<ScheduleView>> schedulesResult = scheduleService.listSchedulesByDate(today);
         if (schedulesResult.isFailure()) {
@@ -99,7 +105,9 @@ public final class SummaryService {
                 weekEnd,
                 monthStart,
                 monthEnd,
-                tasksResult.getPayload(),
+                todayTasks,
+                overdueTasks,
+                upcomingHighPriorityTasks,
                 schedulesResult.getPayload(),
                 weekStudyPlans,
                 countCompletedWeekPlans(weekStudyPlans),
@@ -143,6 +151,39 @@ public final class SummaryService {
         return (int) weekStudyPlans.stream()
                 .filter(plan -> plan.status() == StudyPlanStatus.COMPLETED)
                 .count();
+    }
+
+    private static List<TaskView> filterTodayTasks(List<TaskView> tasks, LocalDate today) {
+        Objects.requireNonNull(tasks, "tasks");
+        Objects.requireNonNull(today, "today");
+        return tasks.stream()
+                .filter(task -> task.dueDate().equals(today))
+                .toList();
+    }
+
+    private static List<TaskView> filterOverdueTasks(List<TaskView> tasks, LocalDate today) {
+        Objects.requireNonNull(tasks, "tasks");
+        Objects.requireNonNull(today, "today");
+        return tasks.stream()
+                .filter(task -> task.dueDate().isBefore(today))
+                .filter(SummaryService::isIncomplete)
+                .toList();
+    }
+
+    private static List<TaskView> filterUpcomingHighPriorityTasks(List<TaskView> tasks, LocalDate today) {
+        Objects.requireNonNull(tasks, "tasks");
+        Objects.requireNonNull(today, "today");
+        LocalDate windowEnd = today.plusDays(7);
+        return tasks.stream()
+                .filter(task -> !task.dueDate().isBefore(today))
+                .filter(task -> !task.dueDate().isAfter(windowEnd))
+                .filter(task -> task.priority() == TaskPriority.HIGH)
+                .filter(SummaryService::isIncomplete)
+                .toList();
+    }
+
+    private static boolean isIncomplete(TaskView task) {
+        return task.status() != TaskStatus.COMPLETED;
     }
 
     private static int countIncompleteWeekPlans(List<StudyPlanView> weekStudyPlans) {

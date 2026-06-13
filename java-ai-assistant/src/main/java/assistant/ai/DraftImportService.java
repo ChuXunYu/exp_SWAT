@@ -6,6 +6,7 @@ import assistant.common.ErrorCode;
 import assistant.common.OperationResult;
 import assistant.study.StudyPlanService;
 import assistant.study.StudyPlanView;
+import assistant.task.TaskPriority;
 import assistant.task.TaskService;
 import assistant.task.TaskView;
 import java.util.ArrayList;
@@ -86,7 +87,38 @@ public final class DraftImportService {
         if (result.isFailure()) {
             return toFailure(result);
         }
-        return OperationResult.success();
+        List<TaskDraftItem> tasks = toBreakdownTasks(content);
+        if (tasks.isEmpty()) {
+            return OperationResult.success();
+        }
+        return createBreakdownTasks(result.getPayload(), tasks);
+    }
+
+    private List<TaskDraftItem> toBreakdownTasks(StudyPlanDraftContent content) {
+        return content.breakdown().stream()
+                .map(breakdownItem -> toBreakdownTask(content, breakdownItem))
+                .toList();
+    }
+
+    private TaskDraftItem toBreakdownTask(StudyPlanDraftContent content, String breakdownItem) {
+        return new TaskDraftItem(
+                breakdownItem,
+                "来自学习计划：" + content.goalName(),
+                TaskPriority.MEDIUM,
+                content.endDate());
+    }
+
+    private OperationResult<Void> createBreakdownTasks(StudyPlanView studyPlan, List<TaskDraftItem> tasks) {
+        try {
+            OperationResult<Void> result = createTasks(tasks);
+            if (result.isFailure()) {
+                rollbackStudyPlan(studyPlan.id());
+            }
+            return result;
+        } catch (RuntimeException exception) {
+            rollbackStudyPlan(studyPlan.id());
+            throw exception;
+        }
     }
 
     private void rollbackCreatedTasks(List<EntityId> createdIds) {
@@ -96,6 +128,14 @@ public final class DraftImportService {
             } catch (RuntimeException ignored) {
                 // Best-effort rollback: preserve the original import failure.
             }
+        }
+    }
+
+    private void rollbackStudyPlan(EntityId id) {
+        try {
+            studyPlanService.deleteStudyPlan(id);
+        } catch (RuntimeException ignored) {
+            // Best-effort rollback: preserve the original import failure.
         }
     }
 
