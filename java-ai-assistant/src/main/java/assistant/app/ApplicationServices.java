@@ -2,6 +2,7 @@ package assistant.app;
 
 import assistant.ai.AiAssistantService;
 import assistant.ai.DraftLifecycleService;
+import assistant.ai.StructuredSuggestionDraftService;
 import assistant.finance.FinanceService;
 import assistant.note.NoteService;
 import assistant.schedule.ScheduleService;
@@ -19,6 +20,7 @@ public record ApplicationServices(
         NoteService noteService,
         SummaryService summaryService,
         AiAssistantService aiAssistantService,
+        StructuredSuggestionDraftService structuredSuggestionDraftService,
         DraftLifecycleService draftLifecycleService,
         TimeProvider timeProvider) {
     public ApplicationServices {
@@ -29,6 +31,7 @@ public record ApplicationServices(
         Objects.requireNonNull(noteService, "noteService");
         Objects.requireNonNull(summaryService, "summaryService");
         Objects.requireNonNull(aiAssistantService, "aiAssistantService");
+        Objects.requireNonNull(structuredSuggestionDraftService, "structuredSuggestionDraftService");
         Objects.requireNonNull(draftLifecycleService, "draftLifecycleService");
         Objects.requireNonNull(timeProvider, "timeProvider");
     }

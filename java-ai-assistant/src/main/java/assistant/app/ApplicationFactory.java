@@ -11,6 +11,8 @@ import assistant.ai.DraftLifecycleService;
 import assistant.ai.InMemorySuggestionDraftRepository;
 import assistant.ai.JdkAiHttpTransport;
 import assistant.ai.PromptBuilder;
+import assistant.ai.StructuredSuggestionDraftService;
+import assistant.ai.StructuredSuggestionParser;
 import assistant.ai.SuggestionDraftRepository;
 import assistant.common.OperationResult;
 import assistant.finance.FinanceService;
@@ -84,6 +86,13 @@ public final class ApplicationFactory {
                 new AiAssistantService(aiConfiguration, contextProvider(summaryService), promptBuilder, aiClient);
 
         SuggestionDraftRepository draftRepository = new InMemorySuggestionDraftRepository();
+        StructuredSuggestionParser structuredSuggestionParser = new StructuredSuggestionParser();
+        StructuredSuggestionDraftService structuredSuggestionDraftService =
+                new StructuredSuggestionDraftService(
+                        aiAssistantService,
+                        structuredSuggestionParser,
+                        draftRepository,
+                        idGenerator);
         DraftImportService draftImportService = new DraftImportService(taskService, studyPlanService);
         DraftLifecycleService draftLifecycleService = new DraftLifecycleService(draftRepository, draftImportService);
 
@@ -95,6 +104,7 @@ public final class ApplicationFactory {
                 noteService,
                 summaryService,
                 aiAssistantService,
+                structuredSuggestionDraftService,
                 draftLifecycleService,
                 timeProvider);
     }

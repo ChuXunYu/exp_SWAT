@@ -3,10 +3,10 @@
 ## 测试目标
 
 - 验证 8 个核心功能的业务正确性，包括正常创建、查询、修改、删除、统计和汇总。
-- 验证异常输入处理，包括空标题、非法日期范围、非法金额、非法进度、无效草稿、无效 AI 响应和缺失配置。
+- 验证异常输入处理，包括空标题、非法日期范围、非法金额、非法进度、无效草稿、生成任务草稿缺失截止日期、无效 AI 响应和缺失配置。
 - 通过语句覆盖、判定覆盖、条件覆盖和基本路径测试覆盖服务层主要分支。
 - 验证任务、草稿、日程、学习计划等对象的状态迁移，确保重复确认、取消、完成、撤销等非法迁移被拒绝。
-- 验证跨模块同步，例如任务、日程、学习计划、收支和笔记变化后仪表盘摘要与 AI 本地上下文同步更新。
+- 验证跨模块同步，例如任务、日程、学习计划、收支和笔记变化后仪表盘摘要与 AI 本地上下文同步更新，以及控制台生成的 AI 草稿能被列表、查看、确认和取消入口共享访问。
 - 隔离 AI 外部依赖，普通单元测试不访问真实 DeepSeek、真实网络、真实 API Key、真实用户文件或真实当前时间。
 - 记录缺陷发现、修复方式、复现用例和回归验证结论。
 
@@ -73,7 +73,7 @@
 | 核心功能 | 主要被测类 | 代表性测试类 | 覆盖重点 |
 |----------|------------|--------------|----------|
 | AI 问答与学习生活建议。 | `AiAssistantService`, `PromptBuilder`, `DeepSeekAiClient`, `AiErrorMapper`, `AiConfigurationLoader` | `AiAssistantServiceTest`, `PromptBuilderTest`, `DeepSeekAiClientTest`, `AiErrorMapperTest`, `AiConfigurationLoaderTest` | 请求构造、上下文注入、配置默认值、空响应、HTTP/网络/格式异常映射 |
-| AI 结构化建议确认导入。 | `StructuredSuggestionParser`, `DraftLifecycleService`, `DraftImportService`, `SuggestionDraft` | `StructuredSuggestionParserTest`, `DraftLifecycleServiceTest`, `DraftImportServiceTest`, `SuggestionDraftTest`, `ConsoleApplicationTest` | 草稿解析、字段缺失拒绝、确认、取消、重复确认冲突、导入失败回滚 |
+| AI 结构化建议确认导入。 | `StructuredSuggestionDraftService`, `StructuredSuggestionParser`, `DraftLifecycleService`, `DraftImportService`, `SuggestionDraft` | `StructuredSuggestionDraftServiceTest`, `StructuredSuggestionParserTest`, `DraftLifecycleServiceTest`, `DraftImportServiceTest`, `SuggestionDraftTest`, `ConsoleApplicationTest` | 结构化生成、解析、保存前 dueDate 校验、breakdown 保留、字段缺失拒绝、确认、取消、重复确认冲突、导入失败回滚 |
 | 任务待办管理。 | `TaskService`, `TaskItem`, `TaskQuery`, `TaskStatus` | `TaskServiceTest`, `TaskItemTest`, `TaskQueryTest`, `ConsoleApplicationTest` | 新增、空标题、筛选、完成/重复完成/撤销、删除不存在、摘要同步 |
 | 日程提醒管理。 | `ScheduleService`, `ScheduleItem`, `ScheduleConflictPolicy`, `ScheduleStatus`, `ScheduleQuery` | `ScheduleServiceTest`, `ScheduleItemTest`, `ScheduleConflictPolicyTest`, `ScheduleStatusTest` | 时间范围、冲突识别、首尾相接、日期查询、状态计算 |
 | 学习计划管理。 | `StudyPlanService`, `StudyPlan`, `Progress`, `StudyPlanAnalysisService`, `StudyPlanQuery` | `StudyPlanServiceTest`, `StudyPlanTest`, `ProgressTest`, `StudyPlanAnalysisServiceTest` | 创建、日期范围、进度边界、状态、统计 |

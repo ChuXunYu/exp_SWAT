@@ -37,6 +37,11 @@
 | DRAFT-08 | 服务层场景测试 | 回滚路径 | `DraftImportService.importDraft` | `DraftImportServiceTest.rejectsTaskDraftMissingDueDateBeforeCreatingAnyTask`, `DraftImportServiceTest.rollsBackCreatedTasksWhenTaskCreationFails` | dueDate 缺失或第二个任务创建失败 | 不写入或回滚已写入任务 | 通过 |
 | DRAFT-09 | 服务层场景测试 | 基本路径 | `DraftImportService.importDraft` | `DraftImportServiceTest.importsStudyPlanDraft`, `DraftImportServiceTest.propagatesStudyPlanCreationFailure` | 学习计划草稿成功或目标服务校验失败 | 成功导入或传播失败 | 通过 |
 | DRAFT-10 | 控制台交互单元测试 | 边界值 | `ConsoleApplication` 草稿菜单 | `ConsoleApplicationTest.draftMenuRejectsInvalidIdBeforeCallingDraftLifecycleService` | 非数字、小数、非正整数、超出 `long` 的草稿 id | 不调用生命周期服务 | 通过 |
+| DRAFT-11 | 服务层场景测试 | 基本路径 | `StructuredSuggestionDraftService.generateTaskDraft` | `StructuredSuggestionDraftServiceTest.generateTaskDraftParsesAssignsIdAndSavesDraft` | AI 返回合法任务草稿 JSON 且包含 dueDate | 分配草稿 id、保存草稿并返回视图 | 通过 |
+| DRAFT-12 | 服务层场景测试 | 基本路径 | `StructuredSuggestionDraftService.generateStudyPlanDraft` | `StructuredSuggestionDraftServiceTest.generateStudyPlanDraftParsesAssignsIdSavesBreakdown` | AI 返回合法学习计划草稿 JSON 且包含 breakdown | 保存学习计划草稿并保留拆解步骤 | 通过 |
+| DRAFT-13 | 服务层场景测试 | 错误推测 | `StructuredSuggestionDraftService.generateTaskDraft` | `StructuredSuggestionDraftServiceTest.generateTaskDraftRejectsMissingDueDateWithoutSaving`, `StructuredSuggestionDraftServiceTest.generateTaskDraftRejectsMismatchedStudyPlanTypeWithoutSaving` | 任务草稿缺失 dueDate 或返回类型不匹配 | 返回校验失败且不保存草稿 | 通过 |
+| DRAFT-14 | 服务层场景测试 | 错误推测 | `StructuredSuggestionDraftService.generateTaskDraft` | `StructuredSuggestionDraftServiceTest.generateDraftPropagatesNotConfiguredWithoutSaving`, `StructuredSuggestionDraftServiceTest.generateDraftRejectsMalformedJsonWithoutSaving`, `StructuredSuggestionDraftServiceTest.generateDraftRejectsInvalidStructuredFieldsWithoutSaving` | AI 未配置、非 JSON、非法结构化字段 | 传播对应失败且不保存草稿 | 通过 |
+| DRAFT-15 | 控制台交互单元测试 | 场景链路 | `ConsoleApplication` 草稿菜单 | `ConsoleApplicationTest.draftMenuGeneratesTaskDraftAndListsAndViewsIt`, `ConsoleApplicationTest.draftMenuGeneratesStudyPlanDraftAndDisplaysBreakdown`, `ConsoleApplicationTest.generatedTaskDraftCanConfirmCancelAndRejectRepeatConfirm` | 控制台生成任务或学习计划草稿后列表、查看、确认、取消 | 生成草稿详情可见，确认导入写入正式任务，取消不导入，重复确认冲突 | 通过 |
 
 ### 任务待办管理。
 

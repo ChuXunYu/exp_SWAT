@@ -38,6 +38,7 @@ class ApplicationFactoryTest {
                 () -> assertNotNull(services.noteService()),
                 () -> assertNotNull(services.summaryService()),
                 () -> assertNotNull(services.aiAssistantService()),
+                () -> assertNotNull(services.structuredSuggestionDraftService()),
                 () -> assertNotNull(services.draftLifecycleService()),
                 () -> assertNotNull(services.timeProvider()),
                 () -> assertTrue(services.summaryService().getDashboardSummary().isSuccess()));
@@ -144,6 +145,7 @@ class ApplicationFactoryTest {
                         services.noteService(),
                         services.summaryService(),
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         services.draftLifecycleService(),
                         services.timeProvider())),
                 () -> assertNullComponentRejected("scheduleService", () -> new ApplicationServices(
@@ -154,6 +156,7 @@ class ApplicationFactoryTest {
                         services.noteService(),
                         services.summaryService(),
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         services.draftLifecycleService(),
                         services.timeProvider())),
                 () -> assertNullComponentRejected("studyPlanService", () -> new ApplicationServices(
@@ -164,6 +167,7 @@ class ApplicationFactoryTest {
                         services.noteService(),
                         services.summaryService(),
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         services.draftLifecycleService(),
                         services.timeProvider())),
                 () -> assertNullComponentRejected("financeService", () -> new ApplicationServices(
@@ -174,6 +178,7 @@ class ApplicationFactoryTest {
                         services.noteService(),
                         services.summaryService(),
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         services.draftLifecycleService(),
                         services.timeProvider())),
                 () -> assertNullComponentRejected("noteService", () -> new ApplicationServices(
@@ -184,6 +189,7 @@ class ApplicationFactoryTest {
                         null,
                         services.summaryService(),
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         services.draftLifecycleService(),
                         services.timeProvider())),
                 () -> assertNullComponentRejected("summaryService", () -> new ApplicationServices(
@@ -194,6 +200,7 @@ class ApplicationFactoryTest {
                         services.noteService(),
                         null,
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         services.draftLifecycleService(),
                         services.timeProvider())),
                 () -> assertNullComponentRejected("aiAssistantService", () -> new ApplicationServices(
@@ -203,6 +210,18 @@ class ApplicationFactoryTest {
                         services.financeService(),
                         services.noteService(),
                         services.summaryService(),
+                        null,
+                        services.structuredSuggestionDraftService(),
+                        services.draftLifecycleService(),
+                        services.timeProvider())),
+                () -> assertNullComponentRejected("structuredSuggestionDraftService", () -> new ApplicationServices(
+                        services.taskService(),
+                        services.scheduleService(),
+                        services.studyPlanService(),
+                        services.financeService(),
+                        services.noteService(),
+                        services.summaryService(),
+                        services.aiAssistantService(),
                         null,
                         services.draftLifecycleService(),
                         services.timeProvider())),
@@ -214,6 +233,7 @@ class ApplicationFactoryTest {
                         services.noteService(),
                         services.summaryService(),
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         null,
                         services.timeProvider())),
                 () -> assertNullComponentRejected("timeProvider", () -> new ApplicationServices(
@@ -224,6 +244,7 @@ class ApplicationFactoryTest {
                         services.noteService(),
                         services.summaryService(),
                         services.aiAssistantService(),
+                        services.structuredSuggestionDraftService(),
                         services.draftLifecycleService(),
                         null)));
     }

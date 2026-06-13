@@ -79,6 +79,7 @@ class DemoDataFactoryTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 

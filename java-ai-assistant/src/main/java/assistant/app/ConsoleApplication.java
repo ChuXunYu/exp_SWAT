@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public final class ConsoleApplication {
@@ -1808,6 +1809,8 @@ public final class ConsoleApplication {
     private void printDraftMenu() {
         output.println();
         output.println("AI 草稿菜单");
+        output.println("g/task. 生成任务草稿");
+        output.println("p/plan. 生成学习计划草稿");
         output.println("l/list. 列表");
         output.println("v/view. 查看");
         output.println("c/confirm. 确认导入");
@@ -1823,6 +1826,8 @@ public final class ConsoleApplication {
             return true;
         }
         switch (command) {
+            case "g", "task" -> generateTaskDraft();
+            case "p", "plan" -> generateStudyPlanDraft();
             case "l", "list" -> listDrafts();
             case "v", "view" -> viewDraft();
             case "c", "confirm" -> confirmDraft();
@@ -1837,6 +1842,33 @@ public final class ConsoleApplication {
             }
         }
         return running;
+    }
+
+    private void generateTaskDraft() {
+        generateStructuredDraft(
+                "请输入任务草稿目标: ",
+                services.structuredSuggestionDraftService()::generateTaskDraft);
+    }
+
+    private void generateStudyPlanDraft() {
+        generateStructuredDraft(
+                "请输入学习计划草稿目标: ",
+                services.structuredSuggestionDraftService()::generateStudyPlanDraft);
+    }
+
+    private void generateStructuredDraft(
+            String prompt,
+            Function<String, OperationResult<SuggestionDraftView>> generator) {
+        String userGoal = readLine(prompt);
+        if (userGoal == null) {
+            running = false;
+            return;
+        }
+        if (userGoal.isBlank()) {
+            output.println("目标不能为空。");
+            return;
+        }
+        printDraftResult(generator.apply(userGoal));
     }
 
     private void listDrafts() {

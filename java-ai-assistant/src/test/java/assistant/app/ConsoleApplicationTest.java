@@ -13,7 +13,18 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import assistant.ai.DraftLifecycleService;
+import assistant.ai.AiAssistantService;
+import assistant.ai.AiClient;
+import assistant.ai.AiConfiguration;
+import assistant.ai.AiRequest;
+import assistant.ai.AiResponse;
+import assistant.ai.DraftImportService;
+import assistant.ai.InMemorySuggestionDraftRepository;
+import assistant.ai.PromptBuilder;
 import assistant.ai.StudyPlanDraftContent;
+import assistant.ai.StructuredSuggestionDraftService;
+import assistant.ai.StructuredSuggestionParser;
+import assistant.ai.SuggestionDraftRepository;
 import assistant.ai.SuggestionDraftStatus;
 import assistant.ai.SuggestionDraftType;
 import assistant.ai.SuggestionDraftView;
@@ -35,12 +46,15 @@ import assistant.note.NoteView;
 import assistant.schedule.ScheduleService;
 import assistant.study.StudyPlanService;
 import assistant.testability.FixedTimeProvider;
+import assistant.testability.IncrementalIdGenerator;
 import assistant.task.TaskPriority;
 import assistant.task.TaskService;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +132,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -269,6 +284,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -304,6 +320,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -377,6 +394,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -553,6 +571,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -727,6 +746,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -750,6 +770,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -798,6 +819,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -859,6 +881,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -992,6 +1015,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -1015,6 +1039,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -1038,6 +1063,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -1078,6 +1104,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -1106,6 +1133,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -1131,6 +1159,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -1154,6 +1183,7 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
 
@@ -1609,6 +1639,68 @@ class ConsoleApplicationTest {
     }
 
     @Test
+    void draftMenuGeneratesTaskDraftAndListsAndViewsIt() {
+        ApplicationServices services = servicesWithStructuredAi(taskDraftJson("整理任务", "2026-01-20"));
+
+        String output = runWithInput(services, "8\ng\n整理明天任务\nl\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "AI 草稿详情"),
+                () -> assertContains(output, "AI 草稿列表"),
+                () -> assertContains(output, "1 | TASK_DRAFT | CONFIRMABLE | 任务 1 | 学习计划 false"),
+                () -> assertContains(output, "标题: 整理任务"),
+                () -> assertContains(output, "截止日期: 2026-01-20"));
+    }
+
+    @Test
+    void draftMenuGeneratesStudyPlanDraftAndDisplaysBreakdown() {
+        ApplicationServices services = servicesWithStructuredAi(studyPlanDraftJson("准备考试"));
+
+        String output = runWithInput(services, "8\np\n准备考试\nv\n1\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "目标名称: 准备考试"),
+                () -> assertContains(output, "1. 复习基础"),
+                () -> assertContains(output, "2. 刷题"));
+    }
+
+    @Test
+    void draftMenuGenerateRejectsBlankGoalWithoutCallingService() {
+        ApplicationServices services = servicesWithStructuredAi(taskDraftJson("整理任务", "2026-01-20"));
+
+        String output = runWithInput(services, "8\ng\n  \nl\nb\nq\n");
+
+        assertAll(
+                () -> assertContains(output, "目标不能为空。"),
+                () -> assertContains(output, "暂无 AI 草稿"));
+    }
+
+    @Test
+    void draftMenuGenerateFailureDisplaysStableMessage() {
+        ApplicationServices services = servicesWithStructuredAi(AiConfiguration.defaultWithoutApiKey(), taskDraftJson("整理任务", "2026-01-20"));
+
+        String output = runWithInput(services, "8\ng\n整理明天任务\nb\nq\n");
+
+        assertContains(output, "失败: AI_NOT_CONFIGURED - DeepSeek API key is not configured");
+    }
+
+    @Test
+    void generatedTaskDraftCanConfirmCancelAndRejectRepeatConfirm() {
+        ApplicationServices services = servicesWithStructuredAi(
+                taskDraftJson("确认任务", "2026-01-20"),
+                taskDraftJson("取消任务", "2026-01-21"));
+
+        String output = runWithInput(services, "8\ng\n确认\nc\n1\nc\n1\ng\n取消\nx\n2\nb\n2\nl\nb\nq\n");
+
+        String taskList = between(output, "任务列表", "主菜单");
+        assertAll(
+                () -> assertContains(output, "失败: STATE_CONFLICT - suggestion draft is not confirmable"),
+                () -> assertContains(taskList, "确认任务"),
+                () -> assertNotContains(taskList, "取消任务"),
+                () -> assertContains(output, "状态: CANCELLED"));
+    }
+
+    @Test
     void draftMenuRejectsInvalidIdBeforeCallingDraftLifecycleService() {
         ApplicationServices baseServices = servicesWithoutDemoData();
         DraftLifecycleService draftLifecycleService = mock(DraftLifecycleService.class);
@@ -1717,6 +1809,41 @@ class ConsoleApplicationTest {
                 new FixedTimeProvider(LocalDateTime.of(2026, 1, 15, 9, 0)));
     }
 
+    private static ApplicationServices servicesWithStructuredAi(String... responses) {
+        return servicesWithStructuredAi(configuredAi(), responses);
+    }
+
+    private static ApplicationServices servicesWithStructuredAi(AiConfiguration configuration, String... responses) {
+        ApplicationServices baseServices = servicesWithoutDemoData();
+        SuggestionDraftRepository draftRepository = new InMemorySuggestionDraftRepository();
+        IncrementalIdGenerator idGenerator = new IncrementalIdGenerator();
+        AiAssistantService aiAssistantService = new AiAssistantService(
+                configuration,
+                baseServices.summaryService()::buildLocalContext,
+                new PromptBuilder(),
+                new QueueAiClient(responses));
+        StructuredSuggestionDraftService structuredSuggestionDraftService = new StructuredSuggestionDraftService(
+                aiAssistantService,
+                new StructuredSuggestionParser(),
+                draftRepository,
+                idGenerator);
+        DraftLifecycleService draftLifecycleService = new DraftLifecycleService(
+                draftRepository,
+                new DraftImportService(baseServices.taskService(), baseServices.studyPlanService()));
+
+        return new ApplicationServices(
+                baseServices.taskService(),
+                baseServices.scheduleService(),
+                baseServices.studyPlanService(),
+                baseServices.financeService(),
+                baseServices.noteService(),
+                baseServices.summaryService(),
+                aiAssistantService,
+                structuredSuggestionDraftService,
+                draftLifecycleService,
+                baseServices.timeProvider());
+    }
+
     private static String runWithInput(ApplicationServices services, String input) {
         StringWriter output = new StringWriter();
         new ConsoleApplication(services, new StringReader(input), output).run();
@@ -1774,6 +1901,24 @@ class ConsoleApplicationTest {
         return new TaskDraftItem(title, "description", TaskPriority.MEDIUM, dueDate);
     }
 
+    private static AiConfiguration configuredAi() {
+        return new AiConfiguration("https://api.example.com", "/chat", "model-a", "test-key", Duration.ofSeconds(5));
+    }
+
+    private static String taskDraftJson(String title, String dueDate) {
+        return """
+                {"type":"TASK_DRAFT","tasks":[{"title":"%s","description":"description","priority":"MEDIUM","dueDate":"%s"}]}
+                """.formatted(title, dueDate);
+    }
+
+    private static String studyPlanDraftJson(String goalName) {
+        return """
+                {"type":"STUDY_PLAN_DRAFT","studyPlan":{"goalName":"%s","startDate":"2026-01-15",
+                "endDate":"2026-02-15","expectedHours":20,"initialProgress":10,
+                "breakdown":["复习基础","刷题"]}}
+                """.formatted(goalName);
+    }
+
     private static StudyPlanDraftContent studyPlanDraftContent(String goalName) {
         return new StudyPlanDraftContent(
                 goalName,
@@ -1801,6 +1946,7 @@ class ConsoleApplicationTest {
                 noteService,
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 baseServices.draftLifecycleService(),
                 baseServices.timeProvider());
     }
@@ -1815,12 +1961,27 @@ class ConsoleApplicationTest {
                 baseServices.noteService(),
                 baseServices.summaryService(),
                 baseServices.aiAssistantService(),
+                baseServices.structuredSuggestionDraftService(),
                 draftLifecycleService,
                 baseServices.timeProvider());
     }
 
     private static FinanceStatistics statistics(String income, String expense) {
         return FinanceStatistics.of(MoneyValue.of(income), MoneyValue.of(expense));
+    }
+
+    private static final class QueueAiClient implements AiClient {
+        private final ArrayDeque<String> responses;
+
+        private QueueAiClient(String... responses) {
+            this.responses = new ArrayDeque<>(List.of(responses));
+        }
+
+        @Override
+        public OperationResult<AiResponse> chat(AiRequest request) {
+            String response = responses.isEmpty() ? "" : responses.removeFirst();
+            return OperationResult.success(new AiResponse(response));
+        }
     }
 
     private static void assertContains(String text, String expected) {
