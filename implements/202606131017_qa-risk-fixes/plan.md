@@ -42,3 +42,13 @@
 任务：在 ConsoleApplication 中集中补齐任务优先级、任务状态、日程状态、学习计划状态、收支类型等枚举的中文别名输入和中文优先展示；保留现有英文枚举输入兼容；同步控制台测试和受影响测试文档。
 选择理由：本轮需求中已确认必须修复的前四项风险均已通过验证；剩余必须修复项是中文 CLI 暴露英文枚举，主要集中在控制台输入解析、错误提示、列表/详情输出和草稿/摘要展示，适合单独一轮降低回归面。
 上下文：ConsoleApplication 当前提示、解析失败消息和输出详情大量直接使用 LOW/MEDIUM/HIGH、TODO/COMPLETED、UPCOMING/ONGOING/EXPIRED、NOT_STARTED/IN_PROGRESS/COMPLETED/OVERDUE_INCOMPLETE、INCOME/EXPENSE 等内部枚举名；ConsoleApplicationTest 也固定了这些英文输入和输出。实现应避免改变服务层枚举建模，只在控制台层增加中文解析/格式化 helper，例如优先级支持“低/中/高”和英文别名，任务状态支持“未完成/已完成”和英文别名，收支类型支持“收入/支出”和英文别名。非法输入应列出中文可选值并可附带英文别名。
+
+---
+
+## R5 PASSED 中文控制台枚举输入与展示体验
+结果：ConsoleApplication 已支持任务优先级、任务状态、日程状态、学习计划状态、收支类型的中文别名输入，并保留英文枚举输入兼容；任务、日程、学习计划、收支、AI 草稿和摘要紧急任务明细中的用户可见枚举输出已改为中文优先展示；测试计划和测试用例已同步更新。
+测试：验证报告显示 mvn clean verify 通过 989 个测试，DocumentationDeliveryTest 通过；v4 变更已提交并推送。
+
+## R5 PASSED 本轮 QA 风险修复完成
+结果：需求文档列入“本轮必须修复”的 AI 结构化草稿端到端生成入口、学习计划草稿 breakdown 导入落地、任务草稿 dueDate 一致性、摘要页紧急任务视图、中文控制台枚举输入与展示体验均已完成并通过验证。
+测试：各轮验证报告均为 PASSED，最新验证为 v4 的 mvn clean verify 通过 989 个测试。
