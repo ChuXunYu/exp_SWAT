@@ -13,3 +13,9 @@
 ## R1 RETRY 审计并完善 java-ai-assistant README 交付文档
 原因：计划审查指出原计划把“每完成一个轮次都要提交并推送 GitHub”表述为由后续 Runner 完成，但当前 Runner 角色只负责 `git add -A && git commit -m "v{N} done"`，不会执行 `git push`，存在交付责任缺口。
 修正方向：本轮任务继续聚焦 README 交付文档，但明确 GitHub 推送不是 Runner 自动动作；Coder/Verifier/Runner 不得声称已完成推送。Runner 完成提交后，管线外的编排收尾必须在项目根目录检查远端与当前分支，并执行 `git push -u origin 202606130503_readme-delivery-docs`，当前已确认远端为 `origin https://github.com/ChuXunYu/exp_SWAT.git`，当前分支为 `202606130503_readme-delivery-docs`。若推送因认证或网络失败，应在最终交付中明确报告失败原因和待执行命令，而不是把该需求标记为已完成。
+
+---
+
+## R2 PASSED 审计并完善 java-ai-assistant README 交付文档
+结果：已重写 `java-ai-assistant/README.md` 作为新用户交付入口，覆盖项目简介、功能清单、环境要求、构建命令、测试命令、运行命令、配置说明、常见工作流示例、已知限制和测试文档链接；同步增强 `java-ai-assistant/src/test/java/assistant/docs/DocumentationDeliveryTest.java` 的 README 交付断言，保护真实入口命令、DeepSeek/演示数据配置、当前功能面和限制说明。Runner 已提交 `v1 done`，当前分支 `202606130503_readme-delivery-docs` 与 `origin/202606130503_readme-delivery-docs` 对齐。
+测试：`cd /root/exp_SWAT/java-ai-assistant && mvn test` 通过，955 tests run, 0 failures, 0 errors, 0 skipped。
