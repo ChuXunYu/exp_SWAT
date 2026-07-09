@@ -115,19 +115,36 @@ class PromptBuilderTest {
 
     @Test
     void buildAddsStructuredJsonInstructionForTaskSuggestion() {
-        String systemMessage = systemMessageFor(AiScenario.STRUCTURED_TASK_SUGGESTION);
+        OperationResult<AiRequest> result = builder.build(
+                AiScenario.STRUCTURED_TASK_SUGGESTION,
+                "生成任务",
+                configuration(),
+                emptyContext());
+        String systemMessage = result.getPayload().messages().get(0).content();
 
         assertAll(
+                () -> assertTrue(result.getPayload().responseFormat().isJsonObject()),
+                () -> assertEquals(1200, result.getPayload().maxTokens()),
                 () -> assertTrue(systemMessage.contains("只返回单个 JSON 对象")),
+                () -> assertTrue(systemMessage.contains("不要输出 Markdown 代码块")),
+                () -> assertTrue(systemMessage.contains("\"type\":\"TASK_DRAFT\"")),
                 () -> assertTrue(systemMessage.contains("TASK_DRAFT")));
     }
 
     @Test
     void buildAddsStructuredJsonInstructionForStudyPlanSuggestion() {
-        String systemMessage = systemMessageFor(AiScenario.STRUCTURED_STUDY_PLAN_SUGGESTION);
+        OperationResult<AiRequest> result = builder.build(
+                AiScenario.STRUCTURED_STUDY_PLAN_SUGGESTION,
+                "生成学习计划",
+                configuration(),
+                emptyContext());
+        String systemMessage = result.getPayload().messages().get(0).content();
 
         assertAll(
+                () -> assertTrue(result.getPayload().responseFormat().isJsonObject()),
+                () -> assertEquals(1200, result.getPayload().maxTokens()),
                 () -> assertTrue(systemMessage.contains("只返回单个 JSON 对象")),
+                () -> assertTrue(systemMessage.contains("\"type\":\"STUDY_PLAN_DRAFT\"")),
                 () -> assertTrue(systemMessage.contains("STUDY_PLAN_DRAFT")));
     }
 

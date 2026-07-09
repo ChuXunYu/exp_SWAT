@@ -57,8 +57,28 @@ class DeepSeekAiClientTest {
                 () -> assertEquals(Duration.ofSeconds(5), transport.receivedRequest.timeout()),
                 () -> assertEquals("model-a", body.get("model").asText()),
                 () -> assertFalse(body.get("stream").asBoolean()),
+                () -> assertFalse(body.has("response_format")),
+                () -> assertFalse(body.has("max_tokens")),
                 () -> assertEquals("user", body.get("messages").get(0).get("role").asText()),
                 () -> assertEquals("hello", body.get("messages").get(0).get("content").asText()));
+    }
+
+    @Test
+    void chatSerializesStructuredJsonRequestOptions() throws Exception {
+        FakeTransport transport = new FakeTransport();
+        DeepSeekAiClient client = new DeepSeekAiClient(configured(), transport, OBJECT_MAPPER, new AiErrorMapper());
+        AiRequest request = AiRequest.structuredJson(
+                "model-a",
+                List.of(new AiMessage(AiRole.USER, "json please")),
+                1200);
+
+        OperationResult<AiResponse> result = client.chat(request);
+        JsonNode body = OBJECT_MAPPER.readTree(transport.receivedRequest.body());
+
+        assertAll(
+                () -> assertTrue(result.isSuccess()),
+                () -> assertEquals("json_object", body.get("response_format").get("type").asText()),
+                () -> assertEquals(1200, body.get("max_tokens").asInt()));
     }
 
     @Test

@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Objects;
 
 public final class PromptBuilder {
+    private static final int STRUCTURED_JSON_MAX_TOKENS = 1200;
+
     public OperationResult<AiRequest> build(
             AiScenario scenario,
             String userQuestion,
@@ -19,11 +21,14 @@ public final class PromptBuilder {
             return OperationResult.failure(ErrorCode.VALIDATION_ERROR, "user question must not be blank");
         }
 
-        return OperationResult.success(AiRequest.nonStreaming(
-                configuration.model(),
-                List.of(
-                        new AiMessage(AiRole.SYSTEM, buildSystemMessage(scenario)),
-                        new AiMessage(AiRole.USER, buildUserMessage(userQuestion.strip(), localContext)))));
+        List<AiMessage> messages = List.of(
+                new AiMessage(AiRole.SYSTEM, buildSystemMessage(scenario)),
+                new AiMessage(AiRole.USER, buildUserMessage(userQuestion.strip(), localContext)));
+        if (scenario.requiresStructuredJson()) {
+            return OperationResult.success(
+                    AiRequest.structuredJson(configuration.model(), messages, STRUCTURED_JSON_MAX_TOKENS));
+        }
+        return OperationResult.success(AiRequest.nonStreaming(configuration.model(), messages));
     }
 
     private static String buildSystemMessage(AiScenario scenario) {
@@ -32,8 +37,13 @@ public final class PromptBuilder {
                 .append("不得编造本地数据；上下文缺失时要明确说明。")
                 .append(scenario.systemInstruction());
         if (scenario.requiresStructuredJson()) {
-            builder.append(" 只返回单个 JSON 对象。");
+            builder.append(" 只返回单个 JSON 对象，不要输出 Markdown 代码块或额外解释。");
             scenario.targetType().ifPresent(targetType -> builder.append("目标类型：").append(targetType).append("。"));
+            if ("TASK_DRAFT".equals(scenario.targetType().orElse(""))) {
+                builder.append(" JSON 示例：{\"type\":\"TASK_DRAFT\",\"tasks\":[{\"title\":\"复习Java\",\"description\":\"完成课程复习\",\"priority\":\"MEDIUM\",\"dueDate\":\"2026-06-19\"}]}。");
+            } else {
+                builder.append(" JSON 示例：{\"type\":\"STUDY_PLAN_DRAFT\",\"studyPlan\":{\"goalName\":\"复习软件测试\",\"startDate\":\"2026-06-12\",\"endDate\":\"2026-06-19\",\"expectedHours\":12,\"initialProgress\":0,\"breakdown\":[\"整理知识点\",\"完成练习\"]}}。");
+            }
         }
         return builder.toString();
     }

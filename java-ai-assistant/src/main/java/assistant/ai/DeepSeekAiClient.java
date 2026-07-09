@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpTimeoutException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -75,11 +76,22 @@ public final class DeepSeekAiClient implements AiClient {
         return parseResponse(response.body());
     }
 
-    private WireRequest toWireRequest(AiRequest request) {
-        List<WireMessage> messages = request.messages().stream()
+    private Map<String, Object> toWireRequest(AiRequest request) {
+        List<Map<String, String>> messages = request.messages().stream()
                 .map(message -> new WireMessage(message.role().wireValue(), message.content()))
+                .map(message -> Map.of("role", message.role(), "content", message.content()))
                 .toList();
-        return new WireRequest(request.model(), messages, request.stream());
+        LinkedHashMap<String, Object> body = new LinkedHashMap<>();
+        body.put("model", request.model());
+        body.put("messages", messages);
+        body.put("stream", request.stream());
+        if (request.responseFormat() != null) {
+            body.put("response_format", Map.of("type", request.responseFormat().type()));
+        }
+        if (request.maxTokens() != null) {
+            body.put("max_tokens", request.maxTokens());
+        }
+        return body;
     }
 
     private Map<String, String> headers() {
@@ -152,9 +164,6 @@ public final class DeepSeekAiClient implements AiClient {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
-    }
-
-    private record WireRequest(String model, List<WireMessage> messages, boolean stream) {
     }
 
     private record WireMessage(String role, String content) {

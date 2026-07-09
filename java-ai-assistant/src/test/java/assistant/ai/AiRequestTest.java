@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +15,20 @@ class AiRequestTest {
     void nonStreamingCreatesRequestWithStreamFalse() {
         AiRequest request = AiRequest.nonStreaming("model", List.of(userMessage()));
 
-        assertFalse(request.stream());
+        assertAll(
+                () -> assertFalse(request.stream()),
+                () -> assertEquals(null, request.responseFormat()),
+                () -> assertEquals(null, request.maxTokens()));
+    }
+
+    @Test
+    void structuredJsonCreatesRequestWithJsonResponseFormatAndMaxTokens() {
+        AiRequest request = AiRequest.structuredJson("model", List.of(userMessage()), 1200);
+
+        assertAll(
+                () -> assertFalse(request.stream()),
+                () -> assertTrue(request.responseFormat().isJsonObject()),
+                () -> assertEquals(1200, request.maxTokens()));
     }
 
     @Test
@@ -37,7 +51,9 @@ class AiRequestTest {
                 () -> assertNullFieldRejected("model", () -> new AiRequest(null, List.of(userMessage()), false)),
                 () -> assertNullFieldRejected("messages", () -> new AiRequest("model", null, false)),
                 () -> assertNullFieldRejected("message", () -> new AiRequest("model", listWithNull(), false)),
-                () -> assertThrows(IllegalArgumentException.class, () -> new AiRequest("   ", List.of(userMessage()), false)));
+                () -> assertThrows(IllegalArgumentException.class, () -> new AiRequest("   ", List.of(userMessage()), false)),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> AiRequest.structuredJson("model", List.of(userMessage()), 0)));
     }
 
     @Test

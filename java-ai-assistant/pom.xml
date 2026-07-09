@@ -20,6 +20,7 @@
         <maven.surefire.version>3.5.6</maven.surefire.version>
         <maven.failsafe.version>3.5.6</maven.failsafe.version>
         <jacoco.version>0.8.13</jacoco.version>
+        <maven.shade.version>3.6.1</maven.shade.version>
     </properties>
 
     <dependencies>
@@ -93,6 +94,27 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven.shade.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>assistant.app.Main</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
