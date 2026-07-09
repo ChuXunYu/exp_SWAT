@@ -2070,27 +2070,38 @@ class ConsoleApplicationTest {
     }
 
     private static void assertContains(String text, String expected) {
+        String normalizedText = normalizeLineEndings(text);
+        String normalizedExpected = normalizeLineEndings(expected);
         org.junit.jupiter.api.Assertions.assertTrue(
-                text.contains(expected),
+                normalizedText.contains(normalizedExpected),
                 () -> "expected output to contain <" + expected + "> but was:\n" + text);
     }
 
     private static String between(String text, String startInclusive, String endExclusive) {
-        int start = text.indexOf(startInclusive);
+        String normalizedText = normalizeLineEndings(text);
+        String normalizedStart = normalizeLineEndings(startInclusive);
+        String normalizedEnd = normalizeLineEndings(endExclusive);
+        int start = normalizedText.indexOf(normalizedStart);
         org.junit.jupiter.api.Assertions.assertTrue(
                 start >= 0,
                 () -> "expected output to contain start <" + startInclusive + "> but was:\n" + text);
-        int end = text.indexOf(endExclusive, start);
+        int end = normalizedText.indexOf(normalizedEnd, start);
         org.junit.jupiter.api.Assertions.assertTrue(
                 end >= 0,
                 () -> "expected output to contain end <" + endExclusive + "> after start but was:\n" + text);
-        return text.substring(start, end);
+        return normalizedText.substring(start, end);
     }
 
     private static void assertNotContains(String text, String unexpected) {
+        String normalizedText = normalizeLineEndings(text);
+        String normalizedUnexpected = normalizeLineEndings(unexpected);
         org.junit.jupiter.api.Assertions.assertFalse(
-                text.contains(unexpected),
+                normalizedText.contains(normalizedUnexpected),
                 () -> "expected output not to contain <" + unexpected + "> but was:\n" + text);
+    }
+
+    private static String normalizeLineEndings(String text) {
+        return text.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static void assertNullRejected(String expectedMessage, Executable executable) {

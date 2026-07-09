@@ -208,7 +208,8 @@ class DocumentationDeliveryTest {
                         "mvn jacoco:report",
                         "mvn -Pintegration verify",
                         "具体测试数量以当前 Maven/Surefire 输出为准",
-                        "QA 风险修复 v4 执行 `mvn clean verify` 时 989 个测试通过、失败 0 个、错误 0 个、跳过 0 个",
+                        "2026-07-09 当前本地验证记录 `docs/current-verification.md` 显示 `mvn clean verify` 执行 992 个测试",
+                        "历史 QA 风险修复记录，当时 989 个测试通过",
                         "不存在 `*IT.java`",
                         "普通单元测试不得访问真实 DeepSeek、网络、API Key、用户文件或真实当前时间")));
     }
@@ -236,7 +237,8 @@ class DocumentationDeliveryTest {
                         "NOTE-01",
                         "SUMMARY-01",
                         "执行结果数量以当前 Maven/Surefire 输出为准",
-                        "QA 风险修复 v4 执行 `mvn clean verify` 时 989 个测试通过、失败 0 个、错误 0 个、跳过 0 个")),
+                        "2026-07-09 当前本地验证记录 `docs/current-verification.md` 显示 `mvn clean verify` 执行 992 个测试",
+                        "历史 QA 风险修复记录，当时 989 个测试通过")),
                 () -> assertContainsAll(cases, List.of(
                         "AI 任务草稿确认导入到任务服务",
                         "AI 学习计划草稿确认导入到学习计划服务",
@@ -307,7 +309,7 @@ class DocumentationDeliveryTest {
                         "## Build",
                         "## Unit Tests",
                         "mvn clean test",
-                        "passed 989 tests with 0 failures",
+                        "passed 992 tests with 0 failures",
                         "## Integration Tests",
                         "mvn -Pintegration verify",
                         "does not contain `*IT.java` classes",
@@ -323,9 +325,12 @@ class DocumentationDeliveryTest {
                         "## Test Documentation",
                         "[Test plan](docs/test-plan.md)",
                         "[White-box test cases](docs/test-cases.md)",
+                        "[Black-box test cases](docs/black-box-test-cases.md)",
                         "[Defect and regression record](docs/defect-regression.md)",
                         "[Coverage evidence notes](docs/coverage/README.md)",
-                        "[Environment](docs/environment.md)")),
+                        "[Environment](docs/environment.md)",
+                        "[Current verification record](docs/current-verification.md)",
+                        "[Submission checklist](docs/submission-checklist.md)")),
                 () -> assertContainsAll(readme, List.of(
                         "## Coverage",
                         "mvn clean verify",
@@ -425,8 +430,109 @@ class DocumentationDeliveryTest {
                         "[White-box test cases](test-cases.md)",
                         "[Defect and regression record](defect-regression.md)",
                         "[Coverage evidence notes](coverage/README.md)",
-                        "passing 989 tests with 0 failures",
+                        "passing 992 tests with 0 failures",
                         "does not contain `*IT.java` integration test classes")));
+    }
+
+    @Test
+    void blackBoxCasesDocumentExperimentTwoUserWorkflowsAndBoundaries() {
+        String blackBox = read(DOCS.resolve("black-box-test-cases.md"));
+
+        assertAll(
+                () -> assertContainsAll(blackBox, List.of(
+                        "# 实验 2 黑盒测试用例",
+                        "## 测试环境",
+                        "## 用例总览",
+                        "## 手工测试记录模板",
+                        "## 结果分析")),
+                () -> assertContainsAll(blackBox, List.of(
+                        "BB-START-01",
+                        "BB-MENU-01",
+                        "BB-SUMMARY-01",
+                        "BB-TASK-01",
+                        "BB-SCHEDULE-02",
+                        "BB-STUDY-03",
+                        "BB-FINANCE-03",
+                        "BB-NOTE-02",
+                        "BB-AI-01",
+                        "BB-DRAFT-02",
+                        "BB-CONSOLE-01")),
+                () -> assertContainsAll(blackBox, List.of(
+                        "Windows PowerShell",
+                        "AI_NOT_CONFIGURED",
+                        "SCHEDULE_CONFLICT",
+                        "当前没有真实 DeepSeek 网络集成测试",
+                        "`mvn -Pintegration verify` 只是保留集成测试入口")));
+    }
+
+    @Test
+    void currentVerificationRecordsCurrentRunnableEvidenceAndCoverageSummary() {
+        String verification = read(DOCS.resolve("current-verification.md"));
+
+        assertAll(
+                () -> assertContainsAll(verification, List.of(
+                        "# 当前验证记录",
+                        "2026-07-09",
+                        "`mvn -q test` | 通过",
+                        "`mvn -q clean verify` | 通过",
+                        "tests=992, failures=0, errors=0, skipped=0",
+                        "79 个 `*Test.java`",
+                        "target/site/jacoco/index.html",
+                        "target/site/jacoco/jacoco.csv")),
+                () -> assertContainsAll(verification, List.of(
+                        "指令覆盖 | 96.78%",
+                        "分支覆盖 | 86.61%",
+                        "行覆盖 | 94.48%",
+                        "方法覆盖 | 99.08%")),
+                () -> assertContainsAll(verification, List.of(
+                        "当前没有 `*IT.java` 真实集成测试",
+                        "默认测试不访问真实 DeepSeek",
+                        "当前业务数据存储在内存中")));
+    }
+
+    @Test
+    void submissionChecklistDocumentsFourPersonCompliantFinalPackaging() {
+        String checklist = read(DOCS.resolve("submission-checklist.md"));
+        String report = read(Path.of("..", "四人合规版-软件质量保证与测试实验报告.md"));
+        String finalReport = read(Path.of("..", "软件质量保证与测试实验报告-最终高分版.md"));
+
+        assertAll(
+                () -> assertContainsAll(checklist, List.of(
+                        "四人合规版-软件质量保证与测试实验报告.md",
+                        "docs/black-box-test-cases.md",
+                        "docs/current-verification.md",
+                        "不要使用“五人拆分版”作为最终报告",
+                        "课程实验说明要求分组人数不超过 4 人")),
+                () -> assertContainsAll(report, List.of(
+                        "# 实验报告",
+                        "本课程实验说明要求分组人数不超过 4 人",
+                        "成员A",
+                        "成员B",
+                        "成员C",
+                        "成员D")),
+                () -> assertFalse(report.contains("成员E"), "four-person compliant report must not include a fifth member"),
+                () -> assertContainsAll(finalReport, List.of(
+                        "# 实验报告",
+                        "## 1. 实验目的",
+                        "### 2.1 实验1测试计划",
+                        "### 2.2 实验2测试计划",
+                        "### 3.1 实验1测试用例及结果分析",
+                        "### 3.2 实验2测试用例及结果分析",
+                        "## 4. 缺陷记录与回归分析",
+                        "## 5. 质量度量",
+                        "## 6. 提交材料说明",
+                        "## 7. 实验总结",
+                        "## 成绩评定：")),
+                () -> assertContainsAll(finalReport, List.of(
+                        "功能数量为 8，大于小组人数",
+                        "992 个测试、失败 0、错误 0、跳过 0",
+                        "指令覆盖率 | 96.78%",
+                        "分支覆盖率 | 86.61%",
+                        "行覆盖率 | 94.48%",
+                        "班级-学号-姓名-实验报告",
+                        "班级-学号-姓名-答辩视频",
+                        "班级-学号-姓名-其它文档")),
+                () -> assertFalse(finalReport.contains("成员E"), "final report must not include a fifth member"));
     }
 
     @Test
